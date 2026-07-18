@@ -1,0 +1,44 @@
+name: Release arm64 .deb
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -yq build-essential devscripts debhelper dpkg-dev \
+            autoconf libtool gettext gawk gperf bison flex libconfuse-dev \
+            libunistring-dev libsqlite3-dev libavcodec-dev libavformat-dev libavfilter-dev \
+            libswscale-dev libavutil-dev libasound2-dev libxml2-dev libgcrypt20-dev \
+            libavahi-client-dev zlib1g-dev libevent-dev libplist-dev libsodium-dev \
+            libcurl4-openssl-dev libjson-c-dev libprotobuf-c-dev libpulse-dev \
+            libwebsockets-dev libgnutls28-dev
+
+      - name: Set package version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          dch --newversion "$VERSION" --distribution stable "Release $VERSION"
+
+      - name: Build .deb
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Move built package into the workspace
+        run: mv ../owntone_*_arm64.deb .
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: owntone_*_arm64.deb
