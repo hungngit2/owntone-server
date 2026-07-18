@@ -1,5 +1,5 @@
 // src/misc_channels_test.c
-// Manual test: gcc -I src -DHAVE_CLOCK_GETTIME -o /tmp/misc_channels_test src/misc_channels_test.c src/channel_transform.c -lpthread
+// Manual test: gcc -I src -o /tmp/misc_channels_test src/misc_channels_test.c src/misc.c $(pkg-config --cflags --libs libconfuse) -lpthread
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
