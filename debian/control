@@ -2,7 +2,7 @@ Source: owntone
 Section: sound
 Priority: optional
 Maintainer: OwnTone Fork Maintainer <noreply@example.invalid>
-Build-Depends: debhelper-compat (= 13), autotools-dev, autoconf, libtool, gettext, gawk, gperf,
+Build-Depends: debhelper-compat (= 13), autoconf, libtool, gettext, gawk, gperf,
  bison, flex, libconfuse-dev, libunistring-dev, libsqlite3-dev, libavcodec-dev, libavformat-dev,
  libavfilter-dev, libswscale-dev, libavutil-dev, libasound2-dev, libxml2-dev, libgcrypt20-dev,
  libavahi-client-dev, zlib1g-dev, libevent-dev, libplist-dev, libsodium-dev, libcurl4-openssl-dev,
