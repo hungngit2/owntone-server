@@ -1634,6 +1634,7 @@ speaker_to_json(struct player_speaker_info *spk)
   json_object_object_add(output, "needs_auth_key", json_object_new_boolean(spk->needs_auth_key));
   json_object_object_add(output, "volume", json_object_new_int(spk->absvol));
   json_object_object_add(output, "offset_ms", json_object_new_int(spk->offset_ms));
+  json_object_object_add(output, "channels", json_object_new_string(output_channels_to_string(spk->channels)));
   json_object_object_add(output, "format", json_object_new_string(media_format_to_string(spk->format)));
   json_object_object_add(output, "supported_formats", supported_formats);
 
@@ -1701,6 +1702,7 @@ jsonapi_reply_outputs_put_byid(struct httpd_request *hreq)
   int offset_ms;
   const char *pin;
   const char *format;
+  const char *channels;
   int ret;
 
   ret = safe_atou64(hreq->path_parts[2], &output_id);
@@ -1754,6 +1756,14 @@ jsonapi_reply_outputs_put_byid(struct httpd_request *hreq)
     {
       offset_ms = jparse_int_from_obj(request, "offset_ms");
       ret = player_speaker_offset_ms_set(output_id, offset_ms);
+      if (ret < 0)
+	goto error;
+    }
+
+  if (jparse_contains_key(request, "channels", json_type_string))
+    {
+      channels = jparse_str_from_obj(request, "channels");
+      ret = channels ? player_speaker_channels_set(output_id, output_channels_from_string(channels)) : 0;
       if (ret < 0)
 	goto error;
     }
