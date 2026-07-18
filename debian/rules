@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_autoreconf:
+	autoreconf -vi
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		--sysconfdir=/etc --localstatedir=/var \
+		--enable-chromecast --with-pulseaudio \
+		--with-systemddir=/lib/systemd/system

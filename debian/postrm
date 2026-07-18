@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+  purge)
+    deb-systemd-helper purge owntone.service >/dev/null || true
+    getent passwd owntone >/dev/null && userdel owntone || true
+    rm -rf /var/cache/owntone
+    ;;
+esac
+
+exit 0

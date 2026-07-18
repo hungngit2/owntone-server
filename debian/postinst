@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+  configure)
+    getent group owntone >/dev/null || groupadd --system owntone
+    getent passwd owntone >/dev/null || useradd --system --no-create-home \
+      --gid owntone --groups audio --shell /usr/sbin/nologin owntone
+    getent group pulse-access >/dev/null && usermod --append --groups pulse-access owntone || true
+
+    mkdir -p /var/log /var/run /var/cache/owntone
+    chown owntone:owntone /var/cache/owntone
+
+    deb-systemd-helper enable owntone.service >/dev/null || true
+    deb-systemd-invoke restart owntone.service >/dev/null || true
+    ;;
+esac
+
+exit 0
