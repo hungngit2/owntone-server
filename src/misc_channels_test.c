@@ -1,5 +1,9 @@
 // src/misc_channels_test.c
 // Manual test: gcc -o /tmp/misc_channels_test src/misc_channels_test.c -lpthread
+// Note: This test file includes standalone implementations of output_channels_from_string(),
+// output_channels_to_string(), and channel_transform() for self-contained testing without
+// requiring the full OwnTone build dependencies. In the actual build, these functions are
+// implemented in src/misc.c and compiled as part of the project.
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
