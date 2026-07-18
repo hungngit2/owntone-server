@@ -229,6 +229,13 @@ struct airplay_master_session
   struct media_quality quality;
   bool use_ptp;
 
+  // Channel mode for this master session; part of the session cache key so
+  // devices with different channel modes at the same quality don't share a
+  // session. chanbuf holds the transformed PCM for non-BOTH modes.
+  enum output_channels channels;
+  uint8_t *chanbuf;
+  size_t chanbuf_size;
+
   // Number of samples that we tell the output to buffer (this will mean that
   // the position that we send in the sync packages are offset by this amount
   // compared to the rtptimes of the corresponding RTP packages we are sending)
@@ -1112,6 +1119,7 @@ master_session_free(struct airplay_master_session *ams)
     evbuffer_free(ams->encoded_buffer);
 
   free(ams->rawbuf);
+  free(ams->chanbuf);
   free(ams);
 }
 
@@ -1145,7 +1153,7 @@ master_session_cleanup(struct airplay_master_session *ams)
 }
 
 static struct airplay_master_session *
-master_session_make(struct media_quality *quality, bool use_ptp)
+master_session_make(struct media_quality *quality, bool use_ptp, enum output_channels channels)
 {
   struct airplay_master_session *ams;
   uint64_t buffer_duration_ms;
@@ -1156,7 +1164,7 @@ master_session_make(struct media_quality *quality, bool use_ptp)
   // First check if we already have a suitable session
   for (ams = airplay_master_sessions; ams; ams = ams->next)
     {
-      if (quality_is_equal(quality, &ams->rtp_session->quality) && use_ptp == ams->use_ptp)
+      if (quality_is_equal(quality, &ams->rtp_session->quality) && use_ptp == ams->use_ptp && channels == ams->channels)
 	return ams;
     }
 
@@ -1202,6 +1210,7 @@ master_session_make(struct media_quality *quality, bool use_ptp)
 
   ams->quality = *quality;
   ams->use_ptp = use_ptp;
+  ams->channels = channels;
   ams->samples_per_packet = AIRPLAY_SAMPLES_PER_PACKET;
   ams->rawbuf_size = STOB(ams->samples_per_packet, quality->bits_per_sample, quality->channels);
   ams->output_buffer_samples = (buffer_duration_ms - AIRPLAY_AUDIO_LATENCY_MS) * quality->sample_rate / 1000;
@@ -1624,7 +1633,7 @@ session_make(struct output_device *device, int callback_id)
 	goto error;
     }
 
-  session->master_session = master_session_make(&device->quality, extra->use_ptp);
+  session->master_session = master_session_make(&device->quality, extra->use_ptp, device->channels);
   if (!session->master_session)
     {
       DPRINTF(E_LOG, L_AIRPLAY, "Could not attach a master session for device '%s'\n", device->name);
@@ -4008,6 +4017,7 @@ airplay_device_cb(const char *name, const char *type, const char *domain, const 
   device->type_name = outputs_name(device->type);
   device->extra_device_info = extra;
   device->supported_formats = MEDIA_FORMAT_ALAC;
+  device->channels = output_channels_from_string(devcfg ? cfg_getstr(devcfg, "channels") : NULL);
 
   extra->mdns_name = strdup(name); // Used for identifying device when it disappears
 
@@ -4252,7 +4262,25 @@ airplay_write(struct output_buffer *obuf)
 	  packets_sync_send(ams);
 
 	  // TODO avoid this copy
-	  evbuffer_add(ams->input_buffer, obuf->data[i].buffer, obuf->data[i].bufsize);
+	  // obuf->data[i].buffer is shared across every master session at this
+	  // quality (including ones with a different channel mode), so never
+	  // transform it in place. For non-BOTH modes, copy into this session's
+	  // own scratch buffer, transform there, and add that to the encoder.
+	  if (ams->channels == OUTPUT_CHANNELS_BOTH)
+	    {
+	      evbuffer_add(ams->input_buffer, obuf->data[i].buffer, obuf->data[i].bufsize);
+	    }
+	  else
+	    {
+	      if (ams->chanbuf_size < obuf->data[i].bufsize)
+		{
+		  CHECK_NULL(L_AIRPLAY, ams->chanbuf = realloc(ams->chanbuf, obuf->data[i].bufsize));
+		  ams->chanbuf_size = obuf->data[i].bufsize;
+		}
+	      memcpy(ams->chanbuf, obuf->data[i].buffer, obuf->data[i].bufsize);
+	      channel_transform(ams->chanbuf, obuf->data[i].bufsize, obuf->data[i].quality.bits_per_sample, obuf->data[i].quality.channels, ams->channels);
+	      evbuffer_add(ams->input_buffer, ams->chanbuf, obuf->data[i].bufsize);
+	    }
 	  ams->input_buffer_samples += obuf->data[i].samples;
 
 	  // Send as many packets as we have data for (one packet requires rawbuf_size bytes)
