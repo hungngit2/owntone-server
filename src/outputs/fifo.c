@@ -97,6 +97,8 @@ struct fifo_session
 
   uint64_t device_id;
   int callback_id;
+
+  enum output_channels channels;
 };
 
 static struct fifo_session *sessions;
@@ -258,6 +260,7 @@ fifo_session_make(struct output_device *device, int callback_id)
   fifo_session->state = OUTPUT_STATE_CONNECTED;
   fifo_session->device_id = device->id;
   fifo_session->callback_id = callback_id;
+  fifo_session->channels = device->channels;
 
   delay_ms = outputs_buffer_duration_ms_get();
   if (delay_ms + device->offset_ms < 0)
@@ -430,6 +433,7 @@ fifo_write(struct output_buffer *obuf)
 
   memcpy(packet->samples, obuf->data[i].buffer, obuf->data[i].bufsize);
   packet->samples_size = obuf->data[i].bufsize;
+  channel_transform(packet->samples, packet->samples_size, obuf->data[i].quality.bits_per_sample, obuf->data[i].quality.channels, fifo_session->channels);
   packet->pts = obuf->pts;
 
   if (buffer.head)
@@ -509,6 +513,7 @@ fifo_init(void)
   device->has_video = 0;
   device->extra_device_info = path;
   device->supported_formats = MEDIA_FORMAT_PCM;
+  device->channels = output_channels_from_string(cfg_getstr(cfg_fifo, "channels"));
   DPRINTF(E_INFO, L_FIFO, "Adding fifo output device '%s' with path '%s'\n", nickname, path);
 
   player_device_add(device);
