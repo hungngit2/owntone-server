@@ -370,6 +370,9 @@ static void
 device_activate_cb(struct output_device *device, enum output_device_state status);
 
 static void
+idle_resync_device_cb(struct output_device *device, enum output_device_state status);
+
+static void
 idle_resync_timer_arm(void);
 
 static void
@@ -448,8 +451,13 @@ idle_resync_cb(int fd, short what, void *arg)
       if (!OUTPUTS_DEVICE_DISPLAY_SELECTED(device) || device->channels == OUTPUT_CHANNELS_BOTH)
 	continue;
 
-      outputs_device_stop(device, device_shutdown_cb);
-      outputs_device_start(device, device_activate_cb, false);
+      // Use idle-resync specific callbacks, NOT device_shutdown_cb/
+      // device_activate_cb: those call commands_exec_*() on cmdbase and are only
+      // safe as the completion of the command currently executing on cmdbase. We
+      // fire from a bare timer with no owning command, so touching cmdbase here
+      // could corrupt an unrelated in-flight command's pending count.
+      outputs_device_stop(device, NULL);
+      outputs_device_start(device, idle_resync_device_cb, false);
     }
 }
 
@@ -1732,6 +1740,23 @@ device_activate_cb(struct output_device *device, enum output_device_state status
   commands_exec_end(cmdbase, retval);
 }
 
+// Completion callback for the idle-resync reconnect (see idle_resync_cb()).
+// Unlike device_activate_cb it must NOT call commands_exec_*(): idle_resync_cb()
+// fires from a bare timer, not from a command executing on cmdbase. On a
+// successful reconnect we still (re)install device_streaming_cb, because the
+// reconnected session persists and outputs_device_start() won't reinstall it at
+// the next playback start (it early-returns once device->session is set). On
+// failure we leave the device untouched (selected but session-less, like any
+// idle speaker) - the next real start retries and handles the failure properly.
+static void
+idle_resync_device_cb(struct output_device *device, enum output_device_state status)
+{
+  if (!device || status == OUTPUT_STATE_PASSWORD || status == OUTPUT_STATE_FAILED)
+    return;
+
+  outputs_device_cb_set(device, device_streaming_cb);
+}
+
 const char *
 player_pmap(void *p)
 {
@@ -1745,6 +1770,8 @@ player_pmap(void *p)
     return "device_flush_cb";
   else if (p == device_shutdown_cb)
     return "device_shutdown_cb";
+  else if (p == idle_resync_device_cb)
+    return "idle_resync_device_cb";
   else
     return "unknown";
 }
