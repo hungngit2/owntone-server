@@ -211,6 +211,7 @@ static cfg_opt_t sec_fifo[] =
   {
     CFG_STR("nickname", "fifo", CFGF_NONE),
     CFG_STR("path", NULL, CFGF_NONE),
+    CFG_STR("channels", "both", CFGF_NONE),
     // Hidden options
     CFG_BOOL("exclusive", cfg_false, CFGF_NONE),
     CFG_END()
