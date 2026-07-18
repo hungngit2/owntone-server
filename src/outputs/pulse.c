@@ -71,6 +71,10 @@ struct pulse_session
 
   struct media_quality quality;
 
+  enum output_channels channels;
+  uint8_t *chanbuf;
+  size_t chanbuf_size;
+
   uint64_t delay_ms;
 
   int logcount;
@@ -121,6 +125,7 @@ pulse_session_free(struct pulse_session *ps)
   outputs_quality_unsubscribe(&pulse_fallback_quality);
 
   free(ps->devname);
+  free(ps->chanbuf);
 
   free(ps);
 }
@@ -167,6 +172,7 @@ pulse_session_make(struct output_device *device, int callback_id)
   ps->device_id = device->id;
   ps->callback_id = callback_id;
   ps->volume = pulse_from_device_volume(device->volume);
+  ps->channels = device->channels;
   ps->devname = strdup(device->extra_device_info);
 
   ps->delay_ms = outputs_buffer_duration_ms_get();
@@ -431,6 +437,8 @@ sinklist_cb(pa_context *ctx, const pa_sink_info *info, int eol, void *userdata)
   else
     device->offset_ms = offset_ms;
 
+  device->channels = output_channels_from_string(cfg_getstr(cfg_getsec(cfg, "audio"), "channels"));
+
   if (info->index == 0)
     {
       name = cfg_getstr(cfg_getsec(cfg, "audio"), "nickname");
@@ -692,6 +700,8 @@ playback_restart(struct pulse_session *ps, struct output_buffer *obuf)
 static void
 playback_write(struct pulse_session *ps, struct output_buffer *obuf)
 {
+  struct output_data *odata;
+  uint8_t *data;
   int i;
   int ret;
 
@@ -710,9 +720,29 @@ playback_write(struct pulse_session *ps, struct output_buffer *obuf)
       return;
     }
 
+  odata = &obuf->data[i];
+
+  // odata->buffer is shared with every other session reading this quality, so
+  // it must not be mutated in place. If this session wants a channel
+  // transform, copy it into our own scratch buffer first and use that instead
+  // of odata->buffer for the remainder of this function.
+  data = odata->buffer;
+  if (ps->channels != OUTPUT_CHANNELS_BOTH)
+    {
+      if (ps->chanbuf_size < odata->bufsize)
+	{
+	  CHECK_NULL(L_LAUDIO, ps->chanbuf = realloc(ps->chanbuf, odata->bufsize));
+	  ps->chanbuf_size = odata->bufsize;
+	}
+
+      memcpy(ps->chanbuf, odata->buffer, odata->bufsize);
+      channel_transform(ps->chanbuf, odata->bufsize, odata->quality.bits_per_sample, odata->quality.channels, ps->channels);
+      data = ps->chanbuf;
+    }
+
   pa_threaded_mainloop_lock(pulse.mainloop);
 
-  ret = pa_stream_write(ps->stream, obuf->data[i].buffer, obuf->data[i].bufsize, NULL, 0LL, PA_SEEK_RELATIVE);
+  ret = pa_stream_write(ps->stream, data, odata->bufsize, NULL, 0LL, PA_SEEK_RELATIVE);
   if (ret < 0)
     {
       ret = pa_context_errno(pulse.context);
