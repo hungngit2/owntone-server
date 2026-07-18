@@ -47,3 +47,6 @@ owntone@.service
 /.vscode/
 /.devcontainer/
 !/.dev/Makefile
+
+# Local git worktrees for isolated agent workspaces
+.worktrees/
