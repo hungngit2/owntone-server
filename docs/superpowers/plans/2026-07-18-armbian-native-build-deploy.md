@@ -17,12 +17,186 @@
 
 ---
 
-### Task 1: GitHub Actions release workflow
+### Task 1: Debian packaging metadata (`debian/` directory)
+
+**Files:**
+- Create: `debian/control`
+- Create: `debian/rules`
+- Create: `debian/changelog` (placeholder; regenerated per-build by Task 2's workflow)
+- Create: `debian/postinst`
+- Create: `debian/prerm`
+- Create: `debian/postrm`
+- Create: `debian/owntone.conffiles`
+- Create: `debian/compat` — **not needed**, `debhelper-compat (= 13)` in `debian/control`'s `Build-Depends` supersedes it; do not create this file (having both is a `dpkg-buildpackage` error).
+
+**Interfaces:**
+- Consumes: nothing from earlier tasks.
+- Produces: a proper Debian source package that `dpkg-buildpackage` (Task 2) turns into `owntone_<version>_arm64.deb`. `postinst`'s useradd/systemd-enable logic runs on the *target host* at `dpkg -i` time (not on the CI build runner), mirroring `owntone.spec.in`'s `%pre`/`%post` sections exactly.
+
+**Why `dpkg-buildpackage`, not a raw `dpkg-deb --build`:** a bare `dpkg-deb --build <dir>` just tars up whatever directory tree you point it at — it does **not** read `debian/control`/`debian/postinst`/etc. Those files are only meaningful to `debhelper`'s `dh` sequence, invoked via `dpkg-buildpackage`. Task 2's workflow must therefore build with `dpkg-buildpackage -us -uc -b`, which runs `dh_auto_configure` → `dh_auto_build` → `dh_auto_install` → `dh_installsystemd`/`dh_installdeb` (packaging `postinst`/`prerm`/`postrm`) → `dh_builddeb`, not a manual `make install` + `dpkg-deb --build` sequence.
+
+**Why not `--enable-install-user` at configure time:** that configure flag makes `make install-data-hook` run `useradd`/`chown` immediately during `dh_auto_install` — fine for a local `make install`, wrong for packaging, since `dh_auto_install` runs on the *CI build runner*, not the eventual install target. `owntone.spec.in` avoids this by leaving user creation to `%pre` (RPM's pre-install scriptlet, executed on the target at install time); `debian/postinst` is the Debian equivalent — so `debian/rules` must configure *without* `--enable-install-user`, and this task's `postinst` does the equivalent work instead.
+
+- [ ] **Step 1: Write `debian/control`**
+
+```
+Source: owntone
+Section: sound
+Priority: optional
+Maintainer: OwnTone Fork Maintainer <noreply@example.invalid>
+Build-Depends: debhelper-compat (= 13), autotools-dev, autoconf, libtool, gettext, gawk, gperf,
+ bison, flex, libconfuse-dev, libunistring-dev, libsqlite3-dev, libavcodec-dev, libavformat-dev,
+ libavfilter-dev, libswscale-dev, libavutil-dev, libasound2-dev, libxml2-dev, libgcrypt20-dev,
+ libavahi-client-dev, zlib1g-dev, libevent-dev, libplist-dev, libsodium-dev, libcurl4-openssl-dev,
+ libjson-c-dev, libprotobuf-c-dev, libpulse-dev, libwebsockets-dev, libgnutls28-dev
+Standards-Version: 4.6.0
+
+Package: owntone
+Architecture: arm64
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, avahi-daemon
+Description: DAAP/DACP (iTunes), RSP and MPD server with AirPlay/Chromecast support
+ OwnTone is a DAAP/DACP (iTunes), MPD (Music Player Daemon) and RSP (Roku)
+ media server, with support for AirPlay devices/speakers, Apple Remote,
+ MPD clients, Chromecast, network streaming, internet radio, Spotify and
+ LastFM.
+```
+
+- [ ] **Step 2: Write `debian/rules`**
+
+`dh_auto_configure` doesn't know this project's custom `./configure` flags, so override it. Everything else (`dh_auto_build`, `dh_auto_install`, `dh_installsystemd`, `dh_builddeb`) uses the default `dh` sequence:
+
+```make
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_autoreconf:
+	autoreconf -vi
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		--sysconfdir=/etc --localstatedir=/var \
+		--enable-chromecast --with-pulseaudio \
+		--with-systemddir=/lib/systemd/system
+```
+Make it executable: `chmod +x debian/rules`.
+
+- [ ] **Step 3: Write a placeholder `debian/changelog`**
+
+`dpkg-buildpackage` refuses to run without one; Task 2's workflow overwrites the top entry's version at build time via `dch`, so this placeholder only needs to be well-formed, not carry the real release version:
+
+```
+owntone (0.0.0) UNRELEASED; urgency=medium
+
+  * Placeholder changelog entry — actual version is set per-build by the
+    release workflow via `dch --newversion` before dpkg-buildpackage runs.
+
+ -- OwnTone Fork Maintainer <noreply@example.invalid>  Fri, 18 Jul 2026 00:00:00 +0000
+```
+
+- [ ] **Step 4: Write `debian/postinst`** (mirrors `owntone.spec.in`'s `%pre` + `%post` — see `owntone.spec.in:80-94`)
+
+```bash
+#!/bin/sh
+set -e
+
+case "$1" in
+  configure)
+    getent group owntone >/dev/null || groupadd --system owntone
+    getent passwd owntone >/dev/null || useradd --system --no-create-home \
+      --gid owntone --groups audio --shell /usr/sbin/nologin owntone
+    getent group pulse-access >/dev/null && usermod --append --groups pulse-access owntone || true
+
+    mkdir -p /var/log /var/run /var/cache/owntone
+    chown owntone:owntone /var/cache/owntone
+
+    deb-systemd-helper enable owntone.service >/dev/null || true
+    deb-systemd-invoke restart owntone.service >/dev/null || true
+    ;;
+esac
+
+exit 0
+```
+(No config-copying logic needed here: `debian/owntone.conffiles` (Step 6) marks `/etc/owntone.conf` — installed by `dh_auto_install` from the project's own `install-data-hook`/`$(CONF_FILE)` machinery — as a conffile directly, so dpkg's own conffile handling manages first-install-vs-upgrade behavior without a manual copy.)
+
+- [ ] **Step 5: Write `debian/prerm` and `debian/postrm`**
+
+```bash
+# debian/prerm
+#!/bin/sh
+set -e
+
+case "$1" in
+  remove|deconfigure)
+    deb-systemd-invoke stop owntone.service >/dev/null || true
+    ;;
+esac
+
+exit 0
+```
+
+```bash
+# debian/postrm
+#!/bin/sh
+set -e
+
+case "$1" in
+  purge)
+    deb-systemd-helper purge owntone.service >/dev/null || true
+    getent passwd owntone >/dev/null && userdel owntone || true
+    rm -rf /var/cache/owntone
+    ;;
+esac
+
+exit 0
+```
+
+- [ ] **Step 6: Mark the config file as a conffile**
+
+```
+# debian/owntone.conffiles
+/etc/owntone.conf
+```
+
+- [ ] **Step 7: Make scripts executable and do a local build to verify the whole `debian/` directory is consistent**
+
+```bash
+chmod +x debian/rules debian/postinst debian/prerm debian/postrm
+```
+This can't be fully verified until Task 2's workflow logic exists too, but do a local sanity build now rather than waiting, so any `debian/` mistakes are caught here instead of in CI:
+```bash
+docker run --rm --platform linux/arm64 -v "$PWD":/src -w /src ubuntu:24.04 bash -c '
+  apt-get update && apt-get install -yq build-essential devscripts debhelper dpkg-dev \
+    autotools-dev autoconf libtool gettext gawk gperf bison flex libconfuse-dev libunistring-dev \
+    libsqlite3-dev libavcodec-dev libavformat-dev libavfilter-dev libswscale-dev libavutil-dev \
+    libasound2-dev libxml2-dev libgcrypt20-dev libavahi-client-dev zlib1g-dev libevent-dev \
+    libplist-dev libsodium-dev libcurl4-openssl-dev libjson-c-dev libprotobuf-c-dev libpulse-dev \
+    libwebsockets-dev libgnutls28-dev &&
+  dch --newversion 0.0.0-test --distribution UNRELEASED "Local verification build" &&
+  dpkg-buildpackage -us -uc -b
+'
+ls ../owntone_0.0.0-test_arm64.deb   # dpkg-buildpackage writes the .deb one directory up from the source tree
+dpkg-deb --info ../owntone_0.0.0-test_arm64.deb | grep -E "postinst|prerm|postrm"
+```
+Expected: the build succeeds and `postinst`/`prerm`/`postrm` are listed among the package's control members. (Slow — QEMU-emulated via Docker's binfmt support — but this is a one-time local sanity check, not something run repeatedly.)
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add debian/
+git commit -m "Add Debian packaging metadata for native arm64 builds"
+```
+
+---
+
+### Task 2: GitHub Actions release workflow
 
 **Files:**
 - Create: `.github/workflows/release-arm64.yml`
 
 **Interfaces:**
+- Consumes: the `debian/` packaging metadata from Task 1 — `dpkg-buildpackage` reads `debian/control`/`debian/rules`/`debian/changelog`/etc directly, no separate wiring needed beyond having them present in the checkout.
 - Produces: a `.deb` file uploaded as a GitHub Release asset, named `owntone_<version>_arm64.deb` — consumed by `install.sh` (Task 3), which downloads it by this naming convention via the GitHub Releases API.
 
 - [ ] **Step 1: Confirm a native arm64 GitHub-hosted runner is available on this repo's plan**
@@ -62,51 +236,43 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -yq build-essential clang clang-tools git autotools-dev autoconf \
-            libtool gettext gawk gperf bison flex libconfuse-dev libunistring-dev libsqlite3-dev \
-            libavcodec-dev libavformat-dev libavfilter-dev libswscale-dev libavutil-dev libasound2-dev \
-            libxml2-dev libgcrypt20-dev libavahi-client-dev zlib1g-dev libevent-dev libplist-dev \
-            libsodium-dev libcurl4-openssl-dev libjson-c-dev libprotobuf-c-dev libpulse-dev \
-            libwebsockets-dev libgnutls28-dev debhelper devscripts fakeroot
+          sudo apt-get install -yq build-essential devscripts debhelper dpkg-dev \
+            autotools-dev autoconf libtool gettext gawk gperf bison flex libconfuse-dev \
+            libunistring-dev libsqlite3-dev libavcodec-dev libavformat-dev libavfilter-dev \
+            libswscale-dev libavutil-dev libasound2-dev libxml2-dev libgcrypt20-dev \
+            libavahi-client-dev zlib1g-dev libevent-dev libplist-dev libsodium-dev \
+            libcurl4-openssl-dev libjson-c-dev libprotobuf-c-dev libpulse-dev \
+            libwebsockets-dev libgnutls28-dev
 
-      - name: Determine version
-        id: version
+      - name: Set package version from tag
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          dch --newversion "$VERSION" --distribution stable "Release $VERSION"
 
       - name: Build .deb
-        run: |
-          autoreconf -vi
-          ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var \
-            --enable-chromecast --with-pulseaudio --with-systemddir=/lib/systemd/system
-          make -j"$(nproc)"
-          fakeroot make install DESTDIR="$PWD/debian/owntone"
-          dpkg-deb --build --root-owner-group debian/owntone \
-            "owntone_${{ steps.version.outputs.version }}_arm64.deb"
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Move built package into the workspace
+        run: mv ../owntone_*_arm64.deb .
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: owntone_${{ steps.version.outputs.version }}_arm64.deb
+          files: owntone_*_arm64.deb
 ```
-
-(This references `debian/control`/`debian/postinst`/etc from Task 2, which must exist in the repo before this workflow can succeed — do Task 2 first, or in the same PR.)
 
 - [ ] **Step 3: Verify locally before relying on CI**
 
-Since this can't be fully exercised without pushing a tag, at minimum dry-run the build portion on an arm64 machine or arm64 Docker container:
+This is the same command already run as part of Task 1 Step 7 — re-run it here only if `debian/rules`/`debian/control` changed since then:
 ```bash
 docker run --rm --platform linux/arm64 -v "$PWD":/src -w /src ubuntu:24.04 bash -c '
-  apt-get update && apt-get install -yq build-essential autotools-dev autoconf libtool gettext gawk gperf bison flex libconfuse-dev libunistring-dev libsqlite3-dev libavcodec-dev libavformat-dev libavfilter-dev libswscale-dev libavutil-dev libasound2-dev libxml2-dev libgcrypt20-dev libavahi-client-dev zlib1g-dev libevent-dev libplist-dev libsodium-dev libcurl4-openssl-dev libjson-c-dev libprotobuf-c-dev libpulse-dev libwebsockets-dev libgnutls28-dev debhelper devscripts fakeroot &&
-  autoreconf -vi &&
-  ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var --enable-chromecast --with-pulseaudio --with-systemddir=/lib/systemd/system &&
-  make -j"$(nproc)" &&
-  fakeroot make install DESTDIR=/src/debian/owntone &&
-  dpkg-deb --build --root-owner-group debian/owntone /src/owntone_test_arm64.deb
+  apt-get update && apt-get install -yq build-essential devscripts debhelper dpkg-dev autotools-dev autoconf libtool gettext gawk gperf bison flex libconfuse-dev libunistring-dev libsqlite3-dev libavcodec-dev libavformat-dev libavfilter-dev libswscale-dev libavutil-dev libasound2-dev libxml2-dev libgcrypt20-dev libavahi-client-dev zlib1g-dev libevent-dev libplist-dev libsodium-dev libcurl4-openssl-dev libjson-c-dev libprotobuf-c-dev libpulse-dev libwebsockets-dev libgnutls28-dev &&
+  dch --newversion 29.2-test --distribution UNRELEASED "Local verification build" &&
+  dpkg-buildpackage -us -uc -b
 '
+ls ../owntone_29.2-test_arm64.deb
 ```
-Expected: `owntone_test_arm64.deb` produced with no errors. (This uses QEMU under the hood via Docker Desktop's binfmt support, so it's slow — a few minutes — but validates the packaging steps independent of GitHub Actions runner availability.)
+Expected: `owntone_29.2-test_arm64.deb` produced with no errors.
 
 - [ ] **Step 4: Commit**
 
@@ -117,132 +283,13 @@ git commit -m "Add arm64 .deb release workflow"
 
 ---
 
-### Task 2: Debian packaging metadata (`debian/` directory)
-
-**Files:**
-- Create: `debian/control`
-- Create: `debian/postinst`
-- Create: `debian/prerm`
-- Create: `debian/postrm`
-- Create: `debian/owntone.conffiles`
-
-**Interfaces:**
-- Consumes: nothing from earlier tasks.
-- Produces: the package metadata Task 1's `dpkg-deb --build` step packages up; `postinst`'s useradd/systemd-enable logic runs on the *target host* at `dpkg -i` time (not on the CI build runner), mirroring `owntone.spec.in`'s `%pre`/`%post` sections exactly.
-
-**Why not `--enable-install-user` at build time:** that configure flag makes `make install-data-hook` run `useradd`/`chown` immediately — fine for a local `make install`, wrong for packaging, since it would run those commands against the *CI runner's* own user database, not the eventual install target's. `owntone.spec.in` avoids this by leaving user creation to `%pre` (RPM's pre-install scriptlet, executed on the target at install time); `debian/postinst` is the Debian equivalent, so build *without* `--enable-install-user` (already the case in Task 1's `./configure` line) and do the equivalent work here instead.
-
-- [ ] **Step 1: Write `debian/control`**
-
-```
-Source: owntone
-Section: sound
-Priority: optional
-Maintainer: OwnTone Fork Maintainer <noreply@example.invalid>
-Build-Depends: debhelper-compat (= 13)
-Standards-Version: 4.6.0
-
-Package: owntone
-Architecture: arm64
-Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, avahi-daemon
-Description: DAAP/DACP (iTunes), RSP and MPD server with AirPlay/Chromecast support
- OwnTone is a DAAP/DACP (iTunes), MPD (Music Player Daemon) and RSP (Roku)
- media server, with support for AirPlay devices/speakers, Apple Remote,
- MPD clients, Chromecast, network streaming, internet radio, Spotify and
- LastFM.
-```
-
-- [ ] **Step 2: Write `debian/postinst`** (mirrors `owntone.spec.in`'s `%pre` + `%post` — see `owntone.spec.in:80-94`)
-
-```bash
-#!/bin/sh
-set -e
-
-case "$1" in
-  configure)
-    getent group owntone >/dev/null || groupadd --system owntone
-    getent passwd owntone >/dev/null || useradd --system --no-create-home \
-      --gid owntone --groups audio --shell /usr/sbin/nologin owntone
-    getent group pulse-access >/dev/null && usermod --append --groups pulse-access owntone || true
-
-    mkdir -p /var/log /var/run /var/cache/owntone
-    chown owntone:owntone /var/cache/owntone
-
-    if [ ! -f /etc/owntone.conf ]; then
-      cp /usr/share/owntone/owntone.conf.default /etc/owntone.conf
-    fi
-
-    deb-systemd-helper enable owntone.service >/dev/null || true
-    deb-systemd-invoke restart owntone.service >/dev/null || true
-    ;;
-esac
-
-exit 0
-```
-(References `/usr/share/owntone/owntone.conf.default` — Task 1's `make install` step already installs the templated `owntone.conf` to `/etc/owntone.conf` directly via its own `install-data-hook`; since that hook is guarded by `COND_INSTALL_CONF_FILE`/won't overwrite an existing file, and packaging shouldn't ship a live config directly into `/etc` for a `.deb` (dpkg conffile handling wants it there via `debian/owntone.conffiles` instead, not copied by a postinst) — reconcile this by checking, at implementation time, exactly where `make install` places the rendered `owntone.conf.in` output relative to `$(DESTDIR)$(sysconfdir)`, and either let `debian/owntone.conffiles` (Step 4) mark `/etc/owntone.conf` as a conffile directly instead of the `postinst` copy shown above, whichever avoids double-handling. Flag this specific reconciliation prominently in the PR — it's the one place this task's design description and the existing Makefile-driven config install could conflict.)
-
-- [ ] **Step 3: Write `debian/prerm` and `debian/postrm`**
-
-```bash
-# debian/prerm
-#!/bin/sh
-set -e
-
-case "$1" in
-  remove|deconfigure)
-    deb-systemd-invoke stop owntone.service >/dev/null || true
-    ;;
-esac
-
-exit 0
-```
-
-```bash
-# debian/postrm
-#!/bin/sh
-set -e
-
-case "$1" in
-  purge)
-    deb-systemd-helper purge owntone.service >/dev/null || true
-    getent passwd owntone >/dev/null && userdel owntone || true
-    rm -rf /var/cache/owntone
-    ;;
-esac
-
-exit 0
-```
-
-- [ ] **Step 4: Mark the config file as a conffile**
-
-```
-# debian/owntone.conffiles
-/etc/owntone.conf
-```
-
-- [ ] **Step 5: Make scripts executable and verify the packaging step runs**
-
-```bash
-chmod +x debian/postinst debian/prerm debian/postrm
-```
-Re-run Task 1 Step 3's local Docker build to confirm `dpkg-deb --build` still succeeds with these files present, then additionally verify with `dpkg-deb --info owntone_test_arm64.deb` that `postinst`/`prerm`/`postrm` are listed among the control members.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add debian/
-git commit -m "Add Debian packaging metadata for native arm64 builds"
-```
-
----
-
 ### Task 3: `install.sh` — migrate the Armbian host from Docker to native
 
 **Files:**
 - Create: `install.sh` (repo root, alongside `owntone.spec.in`/`owntone.service.in`)
 
 **Interfaces:**
-- Consumes: the `owntone_<version>_arm64.deb` GitHub Release asset produced by Task 1.
+- Consumes: the `owntone_<version>_arm64.deb` GitHub Release asset produced by Task 2.
 
 - [ ] **Step 1: Write the script**
 
