@@ -77,6 +77,7 @@ static cfg_opt_t sec_general[] =
     CFG_BOOL("ssl_verifypeer", cfg_true, CFGF_NONE),
     CFG_BOOL("timer_test", cfg_false, CFGF_NONE),
     CFG_INT("start_buffer_ms", 2250, CFGF_NONE),
+    CFG_INT("idle_resync_minutes", 15, CFGF_NONE),
     CFG_END()
   };
 

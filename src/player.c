@@ -326,6 +326,11 @@ timer_t pb_timer;
 #endif
 static struct event *pb_timer_ev;
 
+// One-shot timer that, after N minutes of continuous idle, force-reconnects
+// channel-split outputs to reset accumulated L/R clock drift (see
+// idle_resync_cb()). Armed/disarmed on playback state transitions.
+static struct event *idle_resync_timer_ev;
+
 // Time between ticks, i.e. time between when playback_cb() is invoked
 static struct timespec player_tick_interval;
 // Timer resolution
@@ -357,6 +362,18 @@ struct metadata_pending_register
 
 static void
 pb_abort(void);
+
+static void
+device_shutdown_cb(struct output_device *device, enum output_device_state status);
+
+static void
+device_activate_cb(struct output_device *device, enum output_device_state status);
+
+static void
+idle_resync_timer_arm(void);
+
+static void
+idle_resync_timer_disarm(void);
 
 static int
 pb_suspend(void);
@@ -402,7 +419,59 @@ status_update_impl(enum play_status status, short listener_events, const char *c
 
   player_state = status;
 
+  if (status == PLAY_PLAYING)
+    idle_resync_timer_disarm();
+  else
+    idle_resync_timer_arm();
+
   listener_notify(listener_events);
+}
+
+// Fires after idle_resync_minutes of continuous idle (no playback). Reconnects
+// only the selected, channel-split outputs (channels != BOTH) to reset any L/R
+// clock drift accumulated between them; not a fix, just periodic drift reset -
+// mirrors the mitigation used by the earlier PipeWire-based workaround.
+static void
+idle_resync_cb(int fd, short what, void *arg)
+{
+  struct output_device *device;
+  int idle_resync_minutes;
+
+  idle_resync_minutes = cfg_getint(cfg_getsec(cfg, "general"), "idle_resync_minutes");
+  if (idle_resync_minutes <= 0)
+    return; // disabled
+
+  DPRINTF(E_INFO, L_PLAYER, "Idle timeout reached, reconnecting channel-split outputs to reset drift\n");
+
+  for (device = outputs_list(); device; device = device->next)
+    {
+      if (!OUTPUTS_DEVICE_DISPLAY_SELECTED(device) || device->channels == OUTPUT_CHANNELS_BOTH)
+	continue;
+
+      outputs_device_stop(device, device_shutdown_cb);
+      outputs_device_start(device, device_activate_cb, false);
+    }
+}
+
+static void
+idle_resync_timer_arm(void)
+{
+  int idle_resync_minutes;
+  struct timeval tv;
+
+  idle_resync_minutes = cfg_getint(cfg_getsec(cfg, "general"), "idle_resync_minutes");
+  if (idle_resync_minutes <= 0)
+    return; // disabled
+
+  tv.tv_sec = idle_resync_minutes * 60;
+  tv.tv_usec = 0;
+  evtimer_add(idle_resync_timer_ev, &tv);
+}
+
+static void
+idle_resync_timer_disarm(void)
+{
+  evtimer_del(idle_resync_timer_ev);
 }
 
 /*
@@ -4042,6 +4111,7 @@ player_init(void)
 #else
   CHECK_NULL(L_PLAYER, pb_timer_ev = event_new(evbase_player, SIGALRM, EV_SIGNAL | EV_PERSIST, playback_cb, NULL));
 #endif
+  CHECK_NULL(L_PLAYER, idle_resync_timer_ev = evtimer_new(evbase_player, idle_resync_cb, NULL));
   CHECK_NULL(L_PLAYER, cmdbase = commands_base_new(evbase_player, NULL));
 
   ret = outputs_init();
@@ -4073,6 +4143,7 @@ player_init(void)
   outputs_deinit();
  error_evbase_free:
   commands_base_free(cmdbase);
+  event_free(idle_resync_timer_ev);
   event_free(pb_timer_ev);
   event_base_free(evbase_player);
 #ifdef HAVE_TIMERFD
@@ -4116,6 +4187,7 @@ player_deinit(void)
 
   free(history);
 
+  event_free(idle_resync_timer_ev);
   event_free(pb_timer_ev);
   event_base_free(evbase_player);
 }
