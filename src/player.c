@@ -155,6 +155,7 @@ struct speaker_attr_param
   struct media_quality quality;
   enum media_format format;
   int offset_ms;
+  enum output_channels channels;
 
   int audio_fd;
   int metadata_fd;
@@ -2551,6 +2552,7 @@ device_to_speaker_info(struct player_speaker_info *spk, struct output_device *de
   spk->relvol = device->relvol;
   spk->absvol = device->volume;
   spk->offset_ms = device->offset_ms;
+  spk->channels = device->channels;
 
   spk->supported_formats = device->supported_formats;
   // Devices supporting more than one format should at least have default_format set
@@ -2951,6 +2953,35 @@ speaker_offset_ms_set(void *arg, int *retval)
  error:
   DPRINTF(E_LOG, L_PLAYER, "Error setting offset_ms %d, outside of supported range -2000 to 2000\n", param->offset_ms);
   *retval = -1;
+  return COMMAND_END;
+}
+
+static enum command_state
+speaker_channels_set(void *arg, int *retval)
+{
+  struct speaker_attr_param *param = arg;
+  struct output_device *device;
+
+  device = outputs_device_get(param->spk_id);
+  if (!device)
+    {
+      DPRINTF(E_LOG, L_PLAYER, "Error setting channels, device %" PRIu64 " unknown\n", param->spk_id);
+      *retval = -1;
+      return COMMAND_END;
+    }
+
+  device->channels = param->channels;
+
+  // Same rationale as speaker_offset_ms_set: can't change mid-playback, but
+  // if paused we stop the session so the new mode takes effect on restart
+  if (player_state == PLAY_PAUSED)
+    *retval = outputs_device_stop(device, device_shutdown_cb);
+  else
+    *retval = 0;
+
+  if (*retval > 0)
+    return COMMAND_PENDING; // async
+
   return COMMAND_END;
 }
 
@@ -3670,6 +3701,17 @@ player_speaker_offset_ms_set(uint64_t id, int offset_ms)
   param.offset_ms = offset_ms;
 
   return commands_exec_sync(cmdbase, speaker_offset_ms_set, speaker_generic_bh, &param);
+}
+
+int
+player_speaker_channels_set(uint64_t id, enum output_channels channels)
+{
+  struct speaker_attr_param param;
+
+  param.spk_id = id;
+  param.channels = channels;
+
+  return commands_exec_sync(cmdbase, speaker_channels_set, speaker_generic_bh, &param);
 }
 
 int
