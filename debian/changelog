@@ -1,0 +1,6 @@
+owntone (0.0.0) UNRELEASED; urgency=medium
+
+  * Placeholder changelog entry — actual version is set per-build by the
+    release workflow via `dch --newversion` before dpkg-buildpackage runs.
+
+ -- OwnTone Fork Maintainer <noreply@example.invalid>  Fri, 18 Jul 2026 00:00:00 +0000
