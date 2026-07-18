@@ -6,6 +6,8 @@
 
 **Architecture:** Add a `channels` mode (`both`/`left`/`right`) to `struct output_device`, persist it the same way `offset_ms` is (conffile default + DB-backed runtime override + JSON API), and apply a new allocation-free `channel_transform()` helper at each backend's private-buffer-copy point. RAOP and AirPlay currently encode once per shared "master session" across every device at the same quality, so their master-session cache key must be extended with channel mode — otherwise two same-quality AirPlay devices with different channel modes would silently get identical audio.
 
+**Known limitation carried forward, not fixed, by this plan (investigated, see Task 13):** OwnTone has no cross-output measured-drift feedback loop — each AirPlay/RAOP session's real-world clock accuracy is disciplined independently via that speaker's own NTP/PTP exchange with OwnTone, not against sibling outputs. Two AirPlay outputs configured as a channel-split stereo pair can therefore still drift apart the longer they stay connected, the same failure mode already confirmed empirically in the PipeWire-based workaround this feature replaces (`docs/pipewire-stereo-split-plan.md` in the paired php-ytb-tone repo, "Auto-resync for L/R drift"). Building a genuine shared-clock correction loop would be substantial new audio-sync engineering and is explicitly out of scope. Task 13 carries forward the same mitigation that workaround used: force a reconnect of channel-split outputs after a period of continuous idle, resetting drift at the cost of not solving it during long unbroken playback sessions.
+
 **Tech Stack:** C (autotools build), libconfuse (conffile), sqlite3, libevent, Vue 3 (web UI).
 
 ## Global Constraints
@@ -1152,7 +1154,126 @@ Only after this step passes should the feature be described as working — per t
 
 ---
 
+### Task 13: Idle-based auto-resync for channel-split outputs (drift mitigation, not a fix)
+
+**Files:**
+- Modify: `src/conffile.c:107-136` (sec_general — find its exact line range, it precedes `sec_audio` at line 139)
+- Modify: `src/player.c:315-326` (static globals near `player_state`/`pb_timer_ev`), `src/player.c:396-405` (status_update_impl)
+
+**Interfaces:**
+- Consumes: `device->channels`, `enum output_channels` (Task 2), `player_state`/`status_update_impl` (existing).
+- Produces: nothing consumed by other tasks — this is a self-contained mitigation layered on top of the feature.
+
+**Why this shape:** the PipeWire workaround's watcher tracked continuous idle time and force-cycled the whole PipeWire+RAOP stack after `IDLE_MINUTES_BEFORE_RESYNC` (default 15, 0 = disabled), gated specifically on idle so it never interrupts active listening (`docs/pipewire-stereo-split-plan.md`, "Auto-resync for L/R drift"). This task reimplements the same idea natively: a one-shot libevent timer (mirroring the existing `device->stop_timer` pattern in `src/outputs.c:810`/`995`, not the persistent tick timer `pb_timer_ev`) armed whenever playback stops/pauses, cancelled whenever it resumes, which — on firing — reconnects (stop+start) only the outputs configured as channel-split (`channels != OUTPUT_CHANNELS_BOTH`).
+
+- [ ] **Step 1: Add the config option**
+
+In `src/conffile.c`, `sec_general[]` (read the file to find its exact bounds — it's the section registered as `CFG_SEC("general", sec_general, CFGF_NONE)` at line ~285), add:
+
+```c
+    CFG_INT("idle_resync_minutes", 15, CFGF_NONE),
+```
+
+- [ ] **Step 2: Add the idle timer and its callback in player.c**
+
+Near the existing static globals (after `static struct event *pb_timer_ev;` at line 326):
+
+```c
+static struct event *idle_resync_timer_ev;
+```
+
+Add the callback and an arm/disarm helper, placed near `status_update_impl()` (after line 405):
+
+```c
+static void
+idle_resync_cb(int fd, short what, void *arg)
+{
+  struct output_device *device;
+  int idle_resync_minutes;
+
+  idle_resync_minutes = cfg_getint(cfg_getsec(cfg, "general"), "idle_resync_minutes");
+  if (idle_resync_minutes <= 0)
+    return; // disabled
+
+  DPRINTF(E_INFO, L_PLAYER, "Idle timeout reached, reconnecting channel-split outputs to reset drift\n");
+
+  for (device = outputs_list(); device; device = device->next)
+    {
+      if (!OUTPUTS_DEVICE_DISPLAY_SELECTED(device) || device->channels == OUTPUT_CHANNELS_BOTH)
+	continue;
+
+      outputs_device_stop(device, device_shutdown_cb);
+      outputs_device_start(device, device_streaming_cb, false);
+    }
+}
+
+static void
+idle_resync_timer_arm(void)
+{
+  int idle_resync_minutes;
+  struct timeval tv;
+
+  idle_resync_minutes = cfg_getint(cfg_getsec(cfg, "general"), "idle_resync_minutes");
+  if (idle_resync_minutes <= 0)
+    return;
+
+  tv.tv_sec = idle_resync_minutes * 60;
+  tv.tv_usec = 0;
+  evtimer_add(idle_resync_timer_ev, &tv);
+}
+
+static void
+idle_resync_timer_disarm(void)
+{
+  evtimer_del(idle_resync_timer_ev);
+}
+```
+
+(Confirm the exact names of the existing `device_shutdown_cb`/equivalent "device (re)started" callback used elsewhere in player.c for `outputs_device_stop()`/`outputs_device_start()` pairs — e.g. grep for other `outputs_device_stop(` call sites in player.c, such as the one already in `speaker_offset_ms_set()` at line 2942, and match its callback naming exactly rather than inventing a new one.)
+
+- [ ] **Step 3: Arm/disarm the timer on state transitions**
+
+In `status_update_impl()` (line 396-405), after `player_state = status;`:
+
+```c
+  if (status == PLAY_PLAYING)
+    idle_resync_timer_disarm();
+  else
+    idle_resync_timer_arm();
+```
+
+- [ ] **Step 4: Create/free the timer alongside the existing player init/deinit**
+
+Wherever `pb_timer_ev` is created (`player.c:3999-4001`) and freed (`player.c:4034`/`4077`), add the analogous one-shot (non-persistent) timer:
+
+```c
+  CHECK_NULL(L_PLAYER, idle_resync_timer_ev = evtimer_new(evbase_player, idle_resync_cb, NULL));
+```
+and in the matching teardown paths:
+```c
+  event_free(idle_resync_timer_ev);
+```
+
+- [ ] **Step 5: Verify it builds**
+
+Run: `make -C src player.o conffile.o`
+Expected: no errors.
+
+- [ ] **Step 6: Manual verification (best-effort, real drift can only be confirmed on hardware per Task 12)**
+
+Set `idle_resync_minutes = 1` in a test config, select two channel-split outputs, stop playback, and confirm via logs (`grep "Idle timeout reached" owntone.log`) that a reconnect fires after ~1 minute of idle and not while actively playing/paused-then-resumed-within-the-window.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/conffile.c src/player.c
+git commit -m "Add idle-based auto-resync mitigation for channel-split outputs"
+```
+
+---
+
 ## Known limitations (explicitly out of scope, flag in a code comment if convenient)
 
 - **Chromecast**: not implemented. `cast.c` uses one global singleton `cast_master_session` shared by every Chromecast device regardless of quality or anything else — supporting per-device channels here would require breaking that singleton into one-per-(quality, channel-mode) session, a materially larger change than Tasks 9/10, and not exercised by the AirPlay stereo-pair use case this plan targets.
 - **Streaming (web/HTTP MP3 listeners)**: not implemented. `streaming.c` groups anonymous HTTP listeners by `(format, quality)`, not by discrete per-speaker `output_device` — there's no natural "this specific output" concept to attach a channel mode to without a larger redesign of that grouping key.
+- **Cross-output clock sync**: not implemented, mitigated only. Two AirPlay outputs configured as a channel-split stereo pair can still drift apart during long unbroken playback sessions — each speaker's clock is disciplined independently via NTP/PTP against OwnTone, not against its sibling output. Task 13 forces a periodic reconnect during idle to reset accumulated drift, matching the mitigation already proven in the PipeWire-based workaround this feature replaces; it is not a real fix.
