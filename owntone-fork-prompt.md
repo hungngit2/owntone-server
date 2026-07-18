@@ -24,6 +24,39 @@ of sync over time (confirmed in practice — see
 `docs/pipewire-stereo-split-plan.md` in the php-ytb-tone dashboard repo
 this is paired with, if it's available to you, for the full backstory).
 
+## Known risk carried over from the PipeWire workaround: idle drift
+
+Confirmed empirically with the PipeWire workaround: **two independent
+AirPlay/RAOP sessions (one per speaker) gradually drift out of L/R sync
+the longer they sit connected, especially noticeable after the speakers
+have been idle/standing by for a while** — each session has its own
+clock with no shared reference. A full reconnect (there, toggling the
+output off/on) resets it. The workaround for now is polling for idle
+time and force-reconnecting after ~15 minutes of no playback (see
+`docs/pipewire-stereo-split-plan.md`'s "Auto-resync" section) — a
+band-aid, not a fix.
+
+**This same problem will very likely still exist with the native
+channel-toggle feature**, if each speaker ends up as its own separate
+`airplay` output config in `owntone.conf` (which is the natural way to
+implement per-output channel selection) — the channel-toggle feature
+only removes the need for external PipeWire plumbing, it doesn't by
+itself give the two outputs a shared clock. Before assuming this is
+solved by going native, investigate:
+- Does OwnTone already have any shared-timing/sync logic across
+  *multiple simultaneously active* outputs? The existing `sync_disable`/
+  `adjust_period_seconds` options on the local ALSA output (seen in
+  `owntone.conf`) suggest OwnTone is at least aware of drift-correction
+  for keeping local audio in sync with AirPlay — check whether that
+  logic (or something like it) could be extended to keep two AirPlay
+  outputs mutually in sync with each other, not just one output in sync
+  with wall-clock/local audio.
+- If no such shared-clock mechanism exists, decide whether it's worth
+  building one (nontrivial — real audio sync work) vs. carrying the same
+  idle-based reconnect band-aid forward natively (much cheaper, but only
+  a mitigation, not a real fix).
+Report what you find here too, before committing to an approach.
+
 ## What to investigate first (don't start coding yet)
 
 1. Find where decoded PCM audio gets distributed to each active output.
