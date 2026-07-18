@@ -321,6 +321,27 @@ struct media_quality {
   int bit_rate;
 };
 
+// Which channel(s) an output should play. Default is BOTH so existing
+// configs that don't set "channels" keep today's behavior unchanged.
+enum output_channels {
+  OUTPUT_CHANNELS_BOTH = 0,
+  OUTPUT_CHANNELS_LEFT,
+  OUTPUT_CHANNELS_RIGHT,
+};
+
+enum output_channels
+output_channels_from_string(const char *s);
+
+const char *
+output_channels_to_string(enum output_channels channels);
+
+// Rewrites an interleaved PCM buffer in place so that, for a stereo split
+// mode, both channels carry the same content (left-only: right := left;
+// right-only: left := right). No-op for OUTPUT_CHANNELS_BOTH or channels != 2.
+// Small and allocation-free by design: called once per output per player tick.
+void
+channel_transform(uint8_t *buffer, size_t bufsize, int bits_per_sample, int channels, enum output_channels mode);
+
 bool
 quality_is_equal(struct media_quality *a, struct media_quality *b);
 
