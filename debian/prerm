@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+  remove|deconfigure)
+    deb-systemd-invoke stop owntone.service >/dev/null || true
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0
