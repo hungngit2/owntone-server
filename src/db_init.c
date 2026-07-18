@@ -154,7 +154,8 @@
   "   name           VARCHAR(255) DEFAULT NULL,"       \
   "   auth_key       VARCHAR(2048) DEFAULT NULL,"      \
   "   format         INTEGER DEFAULT 0,"                \
-  "   offset_ms      INTEGER DEFAULT 0"			\
+  "   offset_ms      INTEGER DEFAULT 0,"			\
+  "   channels       INTEGER DEFAULT 0"			\
   ");"
 
 #define T_INOTIFY					\
