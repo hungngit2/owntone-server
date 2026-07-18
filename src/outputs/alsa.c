@@ -118,6 +118,12 @@ struct alsa_playback_session
   // Here we buffer samples during startup
   struct ringbuffer prebuf;
 
+  // Back-pointer to the owning session, and scratch buffer used to hold a
+  // channel-transformed copy of odata->buffer when channels != BOTH
+  struct alsa_session *as;
+  uint8_t *chanbuf;
+  size_t chanbuf_size;
+
   struct alsa_playback_session *next;
 };
 
@@ -143,6 +149,8 @@ struct alsa_session
   struct alsa_mixer mixer;
 
   uint64_t delay_ms;
+
+  enum output_channels channels;
 
   // A session will have multiple playback sessions when the quality changes
   struct alsa_playback_session *pb;
@@ -676,6 +684,7 @@ playback_session_free(struct alsa_playback_session *pb)
   ringbuffer_free(&pb->prebuf, 1);
 
   free(pb->latency_history);
+  free(pb->chanbuf);
   free(pb);
 }
 
@@ -729,6 +738,8 @@ playback_session_add(struct alsa_session *as, struct media_quality *quality, str
 
   CHECK_NULL(L_LAUDIO, pb = calloc(1, sizeof(struct alsa_playback_session)));
   CHECK_NULL(L_LAUDIO, pb->latency_history = calloc(alsa_latency_history_size, sizeof(double)));
+
+  pb->as = as;
 
   ret = pcm_open(&pb->pcm, as->devname, quality);
   if (ret == ALSA_ERROR_DEVICE_BUSY)
@@ -803,18 +814,39 @@ playback_session_add(struct alsa_session *as, struct media_quality *quality, str
 static int
 buffer_write(struct alsa_playback_session *pb, struct output_data *odata, snd_pcm_sframes_t avail)
 {
+  uint8_t *data;
+  size_t datasize;
   uint8_t *buf;
   ssize_t bufsize;
   size_t wrote;
   snd_pcm_sframes_t nsamp;
   snd_pcm_sframes_t ret;
 
+  // odata->buffer is shared with every other session reading this quality, so
+  // it must not be mutated in place. If this session wants a channel
+  // transform, copy it into our own scratch buffer first and use that instead
+  // of odata->buffer for the remainder of this function.
+  data = odata->buffer;
+  datasize = odata->bufsize;
+  if (pb->as->channels != OUTPUT_CHANNELS_BOTH)
+    {
+      if (pb->chanbuf_size < odata->bufsize)
+	{
+	  CHECK_NULL(L_LAUDIO, pb->chanbuf = realloc(pb->chanbuf, odata->bufsize));
+	  pb->chanbuf_size = odata->bufsize;
+	}
+
+      memcpy(pb->chanbuf, odata->buffer, odata->bufsize);
+      channel_transform(pb->chanbuf, odata->bufsize, odata->quality.bits_per_sample, odata->quality.channels, pb->as->channels);
+      data = pb->chanbuf;
+    }
+
   // Prebuffering, no actual writing
   if (avail == 0)
     {
-      wrote = ringbuffer_write(&pb->prebuf, odata->buffer, odata->bufsize);
-      if (wrote < odata->bufsize)
-	DPRINTF(E_WARN, L_LAUDIO, "Bug! Partial prebuf write %zu/%zu\n", wrote, odata->bufsize);
+      wrote = ringbuffer_write(&pb->prebuf, data, datasize);
+      if (wrote < datasize)
+	DPRINTF(E_WARN, L_LAUDIO, "Bug! Partial prebuf write %zu/%zu\n", wrote, datasize);
 
       nsamp = snd_pcm_bytes_to_frames(pb->pcm, wrote);
       return nsamp;
@@ -847,16 +879,16 @@ buffer_write(struct alsa_playback_session *pb, struct output_data *odata, snd_pc
   // then the extra samples get dropped
   if (odata->samples > avail || pb->prebuf.read_avail != 0)
     {
-      wrote = ringbuffer_write(&pb->prebuf, odata->buffer, odata->bufsize);
-      if (wrote < odata->bufsize)
-	DPRINTF(E_WARN, L_LAUDIO, "Dropped %zu bytes of audio - device is overrunning!\n", odata->bufsize - wrote);
+      wrote = ringbuffer_write(&pb->prebuf, data, datasize);
+      if (wrote < datasize)
+	DPRINTF(E_WARN, L_LAUDIO, "Dropped %zu bytes of audio - device is overrunning!\n", datasize - wrote);
 
       return odata->samples;
     }
 
-  nsamp = snd_pcm_bytes_to_frames(pb->pcm, odata->bufsize);
+  nsamp = snd_pcm_bytes_to_frames(pb->pcm, datasize);
 
-  ret = snd_pcm_writei(pb->pcm, odata->buffer, nsamp);
+  ret = snd_pcm_writei(pb->pcm, data, nsamp);
   if (ret < 0)
     return ret;
 
@@ -1173,6 +1205,8 @@ alsa_session_make(struct output_device *device, int callback_id)
   else
     as->delay_ms += device->offset_ms;
 
+  as->channels = device->channels;
+
   ret = mixer_open(&as->mixer, as->mixer_device_name, as->mixer_name);
   if (ret < 0)
     {
@@ -1400,6 +1434,8 @@ alsa_device_add(cfg_t* cfg_audio, int id)
     DPRINTF(E_LOG, L_LAUDIO, "The ALSA offset_ms (%d) set in the configuration is out of bounds (-1000 -> 1000)\n", offset_ms);
   else
     device->offset_ms = offset_ms;
+
+  device->channels = output_channels_from_string(cfg_getstr(cfg_audio, "channels"));
 
   DPRINTF(E_INFO, L_LAUDIO, "Adding ALSA device '%s' with name '%s'\n", ae->card_name, device->name);
 
