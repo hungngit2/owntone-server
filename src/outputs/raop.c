@@ -174,6 +174,13 @@ struct raop_master_session
   uint32_t samples_per_packet;
   bool encrypt;
 
+  // Channel mode for this master session; part of the session cache key so
+  // devices with different channel modes at the same quality don't share a
+  // session. chanbuf holds the transformed PCM for non-BOTH modes.
+  enum output_channels channels;
+  uint8_t *chanbuf;
+  size_t chanbuf_size;
+
   struct media_quality quality;
 
   // Number of samples that we tell the output to buffer (this will mean that
@@ -1831,6 +1838,7 @@ master_session_free(struct raop_master_session *rms)
     evbuffer_free(rms->encoded_buffer);
 
   free(rms->rawbuf);
+  free(rms->chanbuf);
   free(rms);
 }
 
@@ -1864,7 +1872,7 @@ master_session_cleanup(struct raop_master_session *rms)
 }
 
 static struct raop_master_session *
-master_session_make(struct media_quality *quality, bool encrypt)
+master_session_make(struct media_quality *quality, bool encrypt, enum output_channels channels)
 {
   struct raop_master_session *rms;
   struct transcode_encode_setup_args encode_args = { .profile = XCODE_ALAC, .quality = quality };
@@ -1874,7 +1882,7 @@ master_session_make(struct media_quality *quality, bool encrypt)
   // First check if we already have a suitable session
   for (rms = raop_master_sessions; rms; rms = rms->next)
     {
-      if (encrypt == rms->encrypt && quality_is_equal(quality, &rms->rtp_session->quality))
+      if (encrypt == rms->encrypt && channels == rms->channels && quality_is_equal(quality, &rms->rtp_session->quality))
 	return rms;
     }
 
@@ -1919,6 +1927,7 @@ master_session_make(struct media_quality *quality, bool encrypt)
     }
 
   rms->encrypt = encrypt;
+  rms->channels = channels;
   rms->quality = *quality;
   rms->samples_per_packet = RAOP_SAMPLES_PER_PACKET;
   rms->rawbuf_size = STOB(rms->samples_per_packet, quality->bits_per_sample, quality->channels);
@@ -2260,7 +2269,7 @@ session_make(struct output_device *rd, int callback_id, bool only_probe)
 	goto error;
     }
 
-  rs->master_session = master_session_make(&rd->quality, rs->encrypt);
+  rs->master_session = master_session_make(&rd->quality, rs->encrypt, rd->channels);
   if (!rs->master_session)
     {
       DPRINTF(E_LOG, L_RAOP, "Could not attach a master session for device '%s'\n", rd->name);
@@ -4275,6 +4284,7 @@ raop_device_cb(const char *name, const char *type, const char *domain, const cha
   rd->type_name = outputs_name(rd->type);
   rd->extra_device_info = re;
   rd->supported_formats = MEDIA_FORMAT_ALAC;
+  rd->channels = output_channels_from_string(devcfg ? cfg_getstr(devcfg, "channels") : NULL);
 
   if (port < 0)
     {
@@ -4607,7 +4617,25 @@ raop_write(struct output_buffer *obuf)
 	  packets_sync_send(rms);
 
 	  // TODO avoid this copy
-	  evbuffer_add(rms->input_buffer, obuf->data[i].buffer, obuf->data[i].bufsize);
+	  // obuf->data[i].buffer is shared across every master session at this
+	  // quality (including ones with a different channel mode), so never
+	  // transform it in place. For non-BOTH modes, copy into this session's
+	  // own scratch buffer, transform there, and add that to the encoder.
+	  if (rms->channels == OUTPUT_CHANNELS_BOTH)
+	    {
+	      evbuffer_add(rms->input_buffer, obuf->data[i].buffer, obuf->data[i].bufsize);
+	    }
+	  else
+	    {
+	      if (rms->chanbuf_size < obuf->data[i].bufsize)
+		{
+		  CHECK_NULL(L_RAOP, rms->chanbuf = realloc(rms->chanbuf, obuf->data[i].bufsize));
+		  rms->chanbuf_size = obuf->data[i].bufsize;
+		}
+	      memcpy(rms->chanbuf, obuf->data[i].buffer, obuf->data[i].bufsize);
+	      channel_transform(rms->chanbuf, obuf->data[i].bufsize, obuf->data[i].quality.bits_per_sample, obuf->data[i].quality.channels, rms->channels);
+	      evbuffer_add(rms->input_buffer, rms->chanbuf, obuf->data[i].bufsize);
+	    }
 	  rms->input_buffer_samples += obuf->data[i].samples;
 
 	  // Send as many packets as we have data for (one packet requires rawbuf_size bytes)
