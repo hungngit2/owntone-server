@@ -315,7 +315,7 @@ metadata_prepare(struct input_source *source)
 static int
 setup(struct input_source *source)
 {
-  struct transcode_decode_setup_args decode_args = { .profile = XCODE_PCM_NATIVE, .is_http = true, .len_ms = source->len_ms };
+  struct transcode_decode_setup_args decode_args = { .profile = XCODE_PCM_NATIVE, .is_http = true, .headers = source->headers, .len_ms = source->len_ms };
   struct transcode_encode_setup_args encode_args = { .profile = XCODE_PCM_NATIVE, };
   struct transcode_ctx *ctx;
   char *url;

@@ -57,6 +57,10 @@ struct input_source
   enum data_kind data_kind;
   enum media_kind media_kind;
   char *path;
+  // Already-formatted "Key: Value\r\nKey2: Value2" HTTP request headers, or
+  // NULL. Only meaningful for data_kind == DATA_KIND_HTTP. Owned/freed the
+  // same way path is.
+  char *headers;
 
   // Flags that the input has been opened (i.e. needs to be closed)
   bool open;
