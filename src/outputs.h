@@ -137,6 +137,9 @@ struct output_device
   // For user config of speaker start
   int offset_ms;
 
+  // For user config of per-output channel selection (both/left/right)
+  enum output_channels channels;
+
   // Address
   char *v4_address;
   char *v6_address;

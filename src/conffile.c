@@ -77,6 +77,7 @@ static cfg_opt_t sec_general[] =
     CFG_BOOL("ssl_verifypeer", cfg_true, CFGF_NONE),
     CFG_BOOL("timer_test", cfg_false, CFGF_NONE),
     CFG_INT("start_buffer_ms", 2250, CFGF_NONE),
+    CFG_INT("idle_resync_minutes", 15, CFGF_NONE),
     CFG_END()
   };
 
@@ -144,6 +145,7 @@ static cfg_opt_t sec_audio[] =
     CFG_STR("card", "default", CFGF_NONE),
     CFG_STR("mixer", NULL, CFGF_NONE),
     CFG_STR("mixer_device", NULL, CFGF_NONE),
+    CFG_STR("channels", "both", CFGF_NONE),
     CFG_BOOL("sync_disable", cfg_false, CFGF_NONE),
     CFG_INT("offset", 0, CFGF_DEPRECATED),
     CFG_INT("offset_ms", 0, CFGF_DEPRECATED),
@@ -159,6 +161,7 @@ static cfg_opt_t sec_alsa[] =
     CFG_STR("nickname", NULL, CFGF_NONE),
     CFG_STR("mixer", NULL, CFGF_NONE),
     CFG_STR("mixer_device", NULL, CFGF_NONE),
+    CFG_STR("channels", "both", CFGF_NONE),
     CFG_INT("offset_ms", 0, CFGF_DEPRECATED),
     // Hidden options
     CFG_BOOL("exclusive", cfg_false, CFGF_NONE),
@@ -185,6 +188,7 @@ static cfg_opt_t sec_airplay[] =
     CFG_BOOL("raop_disable", cfg_false, CFGF_DEPRECATED),
     CFG_BOOL("airplay2_disable", cfg_false, CFGF_NONE),
     CFG_STR("nickname", NULL, CFGF_NONE),
+    CFG_STR("channels", "both", CFGF_NONE),
     // Hidden options
     CFG_BOOL("exclusive", cfg_false, CFGF_NONE),
     CFG_BOOL("ptp_disable", cfg_false, CFGF_NONE),
@@ -208,6 +212,7 @@ static cfg_opt_t sec_fifo[] =
   {
     CFG_STR("nickname", "fifo", CFGF_NONE),
     CFG_STR("path", NULL, CFGF_NONE),
+    CFG_STR("channels", "both", CFGF_NONE),
     // Hidden options
     CFG_BOOL("exclusive", cfg_false, CFGF_NONE),
     CFG_END()
