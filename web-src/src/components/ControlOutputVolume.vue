@@ -23,6 +23,7 @@
       />
       <control-dropdown
         v-model:value="channels"
+        :disabled="!output.selected"
         :options="channelsOptions"
         @update:value="changeChannels"
       />

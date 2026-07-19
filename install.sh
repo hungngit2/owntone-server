@@ -79,6 +79,22 @@ check_conf_paths() {
   fi
 }
 
+# A Docker deployment's owntone.conf commonly sets logfile to /dev/stderr (or
+# /dev/stdout) so `docker logs` captures it. Under systemd, the service's
+# stdout/stderr are journal-connected, not a real device node -- opening
+# /dev/stderr there fails with ENXIO and owntone exits immediately, before it
+# even reaches the httpd bind step. Rewrite it to a real file unconditionally;
+# it's never correct for a systemd-managed native install.
+fix_conf_logfile() {
+  local conf="$1"
+  if grep -qE '^[[:space:]]*logfile[[:space:]]*=[[:space:]]*"/dev/stderr"' "$conf" \
+    || grep -qE '^[[:space:]]*logfile[[:space:]]*=[[:space:]]*"/dev/stdout"' "$conf"; then
+    log "Adopted config sets logfile to /dev/stderr or /dev/stdout (a Docker-logging convention) -- rewriting to /var/log/owntone.log, since that fails under systemd"
+    sed -i 's|logfile = "/dev/stderr"|logfile = "/var/log/owntone.log"|' "$conf"
+    sed -i 's|logfile = "/dev/stdout"|logfile = "/var/log/owntone.log"|' "$conf"
+  fi
+}
+
 [ "$(id -u)" -eq 0 ] || die "must be run as root"
 
 ARCH="$(dpkg --print-architecture)"
@@ -176,6 +192,7 @@ fi
 if [ -f /etc/owntone.conf.from-docker ]; then
   log "Adopting the preserved Docker config as the active owntone.conf"
   cp -a /etc/owntone.conf.from-docker /etc/owntone.conf
+  fix_conf_logfile /etc/owntone.conf
   check_conf_paths /etc/owntone.conf
 fi
 
