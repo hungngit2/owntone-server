@@ -1,8 +1,14 @@
 #!/bin/bash
 # One-click migration from the Docker-based OwnTone deployment to a native
-# arm64 .deb install. Run as root on the target Armbian host.
+# arm64 .deb install. Run as root on the target Armbian host:
+#   curl -fsSL https://raw.githubusercontent.com/hungngit2/owntone-server/master/install.sh | sudo bash
+# (use `bash`, not `sh` -- this script relies on a couple of bash-only
+# constructs, so piping into dash/POSIX sh will fail partway through)
 #
-# Safe to re-run: re-running after a successful install just upgrades in place.
+# Safe to re-run: re-running after a successful install just upgrades in
+# place, and only ever adopts the preserved Docker config once (see
+# ADOPTED_MARKER below) -- later re-runs never overwrite your live
+# /etc/owntone.conf, however you've since tuned it.
 #
 # Rollback: see the "ROLLBACK" comment block at the end of this file.
 set -euo pipefail
@@ -188,12 +194,19 @@ else
   log "No running Docker container to tear down"
 fi
 
-# --- Adopt the preserved config, if we have one ------------------------------
-if [ -f /etc/owntone.conf.from-docker ]; then
-  log "Adopting the preserved Docker config as the active owntone.conf"
+# --- Adopt the preserved config, but only once -------------------------------
+# After the first adoption, /etc/owntone.conf is yours: re-running this script
+# (e.g. for an upgrade) never overwrites it again, so anything you've tuned
+# since (channels, directories, db_path, ...) survives.
+ADOPTED_MARKER=/etc/.owntone-conf-adopted
+if [ -f "$ADOPTED_MARKER" ]; then
+  log "Config was already adopted on a previous run — leaving your current /etc/owntone.conf as-is"
+elif [ -f /etc/owntone.conf.from-docker ]; then
+  log "Adopting the preserved Docker config as the active owntone.conf (first run only)"
   cp -a /etc/owntone.conf.from-docker /etc/owntone.conf
   fix_conf_logfile /etc/owntone.conf
   check_conf_paths /etc/owntone.conf
+  touch "$ADOPTED_MARKER"
 fi
 
 log "Enabling and starting owntone.service"
