@@ -1845,7 +1845,7 @@ queue_item_file_add(const char *sub_uri, int position, char reshuffle, uint32_t 
 }
 
 static int
-queue_item_stream_add(const char *path, int position, char reshuffle, uint32_t item_id, int *count, int *new_item_id)
+queue_item_stream_add(const char *path, int position, char reshuffle, uint32_t item_id, const char *headers, int *count, int *new_item_id)
 {
   struct media_file_info mfi = { 0 };
   struct db_queue_item qi;
@@ -1855,6 +1855,7 @@ queue_item_stream_add(const char *path, int position, char reshuffle, uint32_t i
   scan_metadata_stream(&mfi, path);
 
   db_queue_item_from_mfi(&qi, &mfi);
+  qi.headers = safe_strdup(headers); // safe_strdup(NULL) returns NULL, matching the "no headers" default
 
   ret = db_queue_add_start(&queue_add_info, position);
   if (ret < 0)
@@ -1881,14 +1882,14 @@ queue_item_stream_add(const char *path, int position, char reshuffle, uint32_t i
 }
 
 static int
-queue_item_add(const char *uri, int position, char reshuffle, uint32_t item_id, int *count, int *new_item_id)
+queue_item_add(const char *uri, int position, char reshuffle, uint32_t item_id, const char *headers, int *count, int *new_item_id)
 {
   int ret;
 
   if (strncmp(uri, "library:", strlen("library:")) == 0)
     ret = queue_item_file_add(uri + strlen("library:"), position, reshuffle, item_id, count, new_item_id);
   else if (net_is_http_or_https(uri))
-    ret = queue_item_stream_add(uri, position, reshuffle, item_id, count, new_item_id);
+    ret = queue_item_stream_add(uri, position, reshuffle, item_id, headers, count, new_item_id);
   else
     ret = -1;
 

@@ -2185,7 +2185,7 @@ scan(enum spotify_request_type request_type)
 /*                              Thread: library                               */
 
 static int
-spotifywebapi_library_queue_item_add(const char *uri, int position, char reshuffle, uint32_t item_id, int *count, int *new_item_id)
+spotifywebapi_library_queue_item_add(const char *uri, int position, char reshuffle, uint32_t item_id, const char *headers, int *count, int *new_item_id)
 {
   enum spotify_item_type type;
 
