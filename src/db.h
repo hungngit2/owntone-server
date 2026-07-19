@@ -546,6 +546,10 @@ struct db_queue_item {
   uint32_t disc;
 
   char *artwork_url;
+  // Already-formatted "Key: Value\r\nKey2: Value2" HTTP request headers for
+  // DATA_KIND_HTTP items, or NULL. Like artwork_url, this has no counterpart
+  // in the files table -- it only ever applies to manually-queued streams.
+  char *headers;
 
   uint32_t queue_version;
 
