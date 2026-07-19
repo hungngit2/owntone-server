@@ -8,12 +8,13 @@
 static void
 test_from_to_string(void)
 {
-  assert(output_channels_from_string("both") == OUTPUT_CHANNELS_BOTH);
+  assert(output_channels_from_string("unset") == OUTPUT_CHANNELS_BOTH);
+  assert(output_channels_from_string("both") == OUTPUT_CHANNELS_BOTH); // legacy alias, still accepted
   assert(output_channels_from_string("left") == OUTPUT_CHANNELS_LEFT);
   assert(output_channels_from_string("right") == OUTPUT_CHANNELS_RIGHT);
   assert(output_channels_from_string("bogus") == OUTPUT_CHANNELS_BOTH);
   assert(output_channels_from_string(NULL) == OUTPUT_CHANNELS_BOTH);
-  assert(strcmp(output_channels_to_string(OUTPUT_CHANNELS_BOTH), "both") == 0);
+  assert(strcmp(output_channels_to_string(OUTPUT_CHANNELS_BOTH), "unset") == 0);
   assert(strcmp(output_channels_to_string(OUTPUT_CHANNELS_LEFT), "left") == 0);
   assert(strcmp(output_channels_to_string(OUTPUT_CHANNELS_RIGHT), "right") == 0);
   printf("test_from_to_string: OK\n");

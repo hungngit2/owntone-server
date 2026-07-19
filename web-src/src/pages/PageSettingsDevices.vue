@@ -121,7 +121,7 @@ const remotePairingDisabled = ref(true)
 const remotePin = ref('')
 
 const channelsOptions = [
-  { id: 'both', name: 'Both' },
+  { id: 'unset', name: 'Not set' },
   { id: 'left', name: 'Left' },
   { id: 'right', name: 'Right' }
 ]
