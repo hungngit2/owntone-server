@@ -1,6 +1,6 @@
 <template>
   <div class="select">
-    <select @change="select($event.target.value)">
+    <select :disabled="disabled" @change="select($event.target.value)">
       <option
         v-for="option in options"
         :key="option.id"
@@ -14,6 +14,7 @@
 
 <script setup>
 const props = defineProps({
+  disabled: Boolean,
   options: { required: true, type: Array },
   value: { required: true, type: [String, Number] }
 })
