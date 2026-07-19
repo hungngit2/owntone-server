@@ -1625,7 +1625,7 @@ mpd_command_add(struct mpd_command_output *out, struct mpd_command_input *in, st
       player_get_status(&status);
 
       // Given path is not in the library, check if it is possible to add as a non-library queue item
-      ret = library_queue_item_add(in->argv[1], -1, status.shuffle, status.item_id, NULL, NULL);
+      ret = library_queue_item_add(in->argv[1], -1, status.shuffle, status.item_id, NULL, NULL, NULL);
       if (ret != LIBRARY_OK)
 	RETURN_ERROR(ACK_ERROR_UNKNOWN, "Failed to add song '%s' to playlist (unknown path)", in->argv[1]);
     }
@@ -1661,7 +1661,7 @@ mpd_command_addid(struct mpd_command_output *out, struct mpd_command_input *in, 
       player_get_status(&status);
 
       // Given path is not in the library, directly add it as a new queue item
-      ret = library_queue_item_add(path, to_pos, status.shuffle, status.item_id, NULL, NULL);
+      ret = library_queue_item_add(path, to_pos, status.shuffle, status.item_id, NULL, NULL, NULL);
       if (ret != LIBRARY_OK)
 	RETURN_ERROR(ACK_ERROR_UNKNOWN, "Failed to add song '%s' to playlist (unknown path)", path);
     }

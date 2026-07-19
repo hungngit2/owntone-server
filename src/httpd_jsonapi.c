@@ -2356,7 +2356,7 @@ queue_tracks_add_byuris(const char *param, char shuffle, uint32_t item_id, int p
 
   for (; uri; uri = strtok_r(NULL, ",", &ptr))
     {
-      ret = library_queue_item_add(uri, pos, shuffle, item_id, &count, &new);
+      ret = library_queue_item_add(uri, pos, shuffle, item_id, NULL, &count, &new);
       if (ret != LIBRARY_OK)
 	{
 	  DPRINTF(E_LOG, L_WEB, "Invalid uri '%s'\n", uri);
