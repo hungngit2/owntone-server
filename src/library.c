@@ -63,6 +63,7 @@ struct queue_item_add_param
   int position;
   char reshuffle;
   uint32_t item_id;
+  const char *headers;
   int *count;
   int *new_item_id;
 };
@@ -541,7 +542,7 @@ queue_item_add(void *arg, int *retval)
 	  continue;
 	}
 
-      ret = sources[i]->queue_item_add(param->path, param->position, param->reshuffle, param->item_id, param->count, param->new_item_id);
+      ret = sources[i]->queue_item_add(param->path, param->position, param->reshuffle, param->item_id, param->headers, param->count, param->new_item_id);
 
       if (ret == LIBRARY_OK)
 	{
@@ -938,7 +939,7 @@ library_queue_save(char *path)
 }
 
 int
-library_queue_item_add(const char *path, int position, char reshuffle, uint32_t item_id, int *count, int *new_item_id)
+library_queue_item_add(const char *path, int position, char reshuffle, uint32_t item_id, const char *headers, int *count, int *new_item_id)
 {
   struct queue_item_add_param param;
   int count_internal;
@@ -951,6 +952,7 @@ library_queue_item_add(const char *path, int position, char reshuffle, uint32_t 
   param.position = position;
   param.reshuffle = reshuffle;
   param.item_id = item_id;
+  param.headers = headers;
   param.count = count ? count : &count_internal;
   param.new_item_id = new_item_id ? new_item_id : &new_item_id_internal;
 

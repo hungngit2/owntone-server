@@ -126,7 +126,7 @@ struct library_source
   /*
    * Add item for the given path to the current queue
    */
-  int (*queue_item_add)(const char *path, int position, char reshuffle, uint32_t item_id, int *count, int *new_item_id);
+  int (*queue_item_add)(const char *path, int position, char reshuffle, uint32_t item_id, const char *headers, int *count, int *new_item_id);
 };
 
 /* --------------------- Interface towards source backends ----------------- */
@@ -229,7 +229,7 @@ int
 library_queue_save(char *path);
 
 int
-library_queue_item_add(const char *path, int position, char reshuffle, uint32_t item_id, int *count, int *new_item_id);
+library_queue_item_add(const char *path, int position, char reshuffle, uint32_t item_id, const char *headers, int *count, int *new_item_id);
 
 int
 library_item_add(const char *path);
