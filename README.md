@@ -42,6 +42,14 @@ It also adds a native `arm64` build/deploy pipeline for Debian-based hosts
   Safe to re-run for upgrades; only ever adopts your Docker config once, so
   anything you've since tuned in `/etc/owntone.conf` is never overwritten.
 
+It also adds optional **per-stream custom HTTP request headers** for plain
+`http(s)://` queue items (`DATA_KIND_HTTP`) — useful for URLs that require a
+specific header (e.g. a `Referer`) to be fetched at all, such as direct CDN
+URLs resolved via `yt-dlp -g`. Pass an already-formatted `"Key: Value\r\nKey2:
+Value2"` string as `headers` alongside `uris` on `POST /api/queue/items/add`,
+or set/change it on an already-queued item via `PUT /api/queue/items/{id}`.
+Plain URLs with no `headers` behave exactly as before — this is opt-in only.
+
 
 ## Looking for help?
 
