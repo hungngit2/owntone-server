@@ -68,6 +68,13 @@
           </control-integer-field>
         </div>
         <div class="column is-one-third">
+          <control-dropdown
+            v-model:value="output.channels"
+            :options="channelsOptions"
+            @update:value="(value) => onOutputChannelsChange(output.id, value)"
+          />
+        </div>
+        <div class="column is-one-third">
           <form
             v-if="output.needs_auth_key"
             @submit.prevent="pairOutput(output.id)"
@@ -94,6 +101,7 @@
 
 <script setup>
 import ContentWithHeading from '@/templates/ContentWithHeading.vue'
+import ControlDropdown from '@/components/ControlDropdown.vue'
 import ControlIntegerField from '@/components/ControlIntegerField.vue'
 import ControlPinField from '@/components/ControlPinField.vue'
 import ControlSwitch from '@/components/ControlSwitch.vue'
@@ -112,12 +120,22 @@ const outputPin = ref('')
 const remotePairingDisabled = ref(true)
 const remotePin = ref('')
 
+const channelsOptions = [
+  { id: 'both', name: 'Both' },
+  { id: 'left', name: 'Left' },
+  { id: 'right', name: 'Right' }
+]
+
 const onOutputPinChange = (pin) => {
   outputPin.value = pin
 }
 
 const onOutputOffsetChange = (identifier, value) => {
   outputs.update(identifier, { offset_ms: value })
+}
+
+const onOutputChannelsChange = (identifier, value) => {
+  outputs.update(identifier, { channels: value })
 }
 
 const onRemotePinChange = (pin, disabled) => {
