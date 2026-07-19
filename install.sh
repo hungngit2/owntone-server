@@ -13,6 +13,17 @@
 # Rollback: see the "ROLLBACK" comment block at the end of this file.
 set -euo pipefail
 
+# When run as `curl ... | sudo bash`, this script's own stdin is still the
+# tail of that network pipe, not a terminal -- and dpkg/postinst/systemctl can
+# each independently try to read from stdin (an interactive prompt, or just
+# checking whether it's a tty). If they get an unexpected pipe instead, they
+# can fail in confusing ways (e.g. "Could not execute systemctl" from
+# deb-systemd-invoke) partway through, well after the script itself has
+# already started running. Detach unconditionally so every subprocess this
+# script spawns sees /dev/null on stdin instead, regardless of how the script
+# itself was invoked (piped or downloaded-then-run).
+exec < /dev/null
+
 GITHUB_REPO="${OWNTONE_FORK_REPO:-hungngit2/owntone-server}"   # override via env for a different fork/upstream
 PINNED_VERSION="${OWNTONE_INSTALL_VERSION:-}"                # set to pin, default = latest release
 EXISTING_CONF="${OWNTONE_EXISTING_CONF:-/opt/docker/owntone/config/owntone.conf}"
