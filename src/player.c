@@ -370,6 +370,9 @@ static void
 device_activate_cb(struct output_device *device, enum output_device_state status);
 
 static void
+idle_resync_stop_cb(struct output_device *device, enum output_device_state status);
+
+static void
 idle_resync_device_cb(struct output_device *device, enum output_device_state status);
 
 static void
@@ -439,6 +442,7 @@ idle_resync_cb(int fd, short what, void *arg)
 {
   struct output_device *device;
   int idle_resync_minutes;
+  int ret;
 
   idle_resync_minutes = cfg_getint(cfg_getsec(cfg, "general"), "idle_resync_minutes");
   if (idle_resync_minutes <= 0)
@@ -456,8 +460,17 @@ idle_resync_cb(int fd, short what, void *arg)
       // safe as the completion of the command currently executing on cmdbase. We
       // fire from a bare timer with no owning command, so touching cmdbase here
       // could corrupt an unrelated in-flight command's pending count.
-      outputs_device_stop(device, NULL);
-      outputs_device_start(device, idle_resync_device_cb, false);
+      //
+      // outputs_device_stop() is async for AirPlay/RAOP (the exact backends this
+      // targets): device->session is only cleared once the stop sequence actually
+      // completes. Calling outputs_device_start() on the next line would early-
+      // return (device->session still set), so the reconnect would never happen.
+      // Chain the start off the stop's completion instead: if stop returns > 0 it
+      // is async and idle_resync_stop_cb will fire the start; if it returns <= 0
+      // no callback is coming (no session / error), so start directly here.
+      ret = outputs_device_stop(device, idle_resync_stop_cb);
+      if (ret <= 0)
+	outputs_device_start(device, idle_resync_device_cb, false);
     }
 }
 
@@ -1740,6 +1753,20 @@ device_activate_cb(struct output_device *device, enum output_device_state status
   commands_exec_end(cmdbase, retval);
 }
 
+// Completion callback for the async stop half of the idle-resync reconnect (see
+// idle_resync_cb()). Fires once outputs_device_stop() has genuinely completed and
+// device->session has been cleared, and only then starts the reconnect - so the
+// stop+start is atomic w.r.t. the async lifecycle rather than racing it. Like
+// idle_resync_device_cb it must NOT call commands_exec_*(): no owning command.
+static void
+idle_resync_stop_cb(struct output_device *device, enum output_device_state status)
+{
+  if (!device)
+    return;
+
+  outputs_device_start(device, idle_resync_device_cb, false);
+}
+
 // Completion callback for the idle-resync reconnect (see idle_resync_cb()).
 // Unlike device_activate_cb it must NOT call commands_exec_*(): idle_resync_cb()
 // fires from a bare timer, not from a command executing on cmdbase. On a
@@ -1770,6 +1797,8 @@ player_pmap(void *p)
     return "device_flush_cb";
   else if (p == device_shutdown_cb)
     return "device_shutdown_cb";
+  else if (p == idle_resync_stop_cb)
+    return "idle_resync_stop_cb";
   else if (p == idle_resync_device_cb)
     return "idle_resync_device_cb";
   else
