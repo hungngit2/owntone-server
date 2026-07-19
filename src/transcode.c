@@ -1373,7 +1373,7 @@ close_input(struct decode_ctx *ctx)
 }
 
 static int
-open_input(struct decode_ctx *ctx, const char *path, struct transcode_evbuf_io *evbuf_io, enum probe_type probe_type)
+open_input(struct decode_ctx *ctx, const char *path, const char *headers, struct transcode_evbuf_io *evbuf_io, enum probe_type probe_type)
 {
   AVDictionary *options = NULL;
   AVCodecContext *dec_ctx;
@@ -1411,6 +1411,12 @@ open_input(struct decode_ctx *ctx, const char *path, struct transcode_evbuf_io *
       // see https://lists.ffmpeg.org/pipermail/ffmpeg-user/2018-September/041109.html
 //      av_dict_set(&options, "reconnect_at_eof", "1", 0);
       av_dict_set(&options, "reconnect_streamed", "1", 0);
+
+      // Per-item custom headers (e.g. Referer), if the queue item set any.
+      // headers is NULL for the overwhelming majority of HTTP items, so skip
+      // the call entirely rather than setting an empty "headers" option.
+      if (headers && *headers)
+	av_dict_set(&options, "headers", headers, 0);
     }
 
   // TODO Newest versions of ffmpeg have timeout and reconnect options we should use
@@ -1946,14 +1952,14 @@ transcode_decode_setup(struct transcode_decode_setup_args args)
     {
       ctx->is_http = true;
 
-      ret = open_input(ctx, args.path, args.evbuf_io, PROBE_TYPE_QUICK);
+      ret = open_input(ctx, args.path, args.headers, args.evbuf_io, PROBE_TYPE_QUICK);
 
       // Retry with a default, slower probe size
       if (ret == AVERROR_STREAM_NOT_FOUND)
-	ret = open_input(ctx, args.path, args.evbuf_io, PROBE_TYPE_DEFAULT);
+	ret = open_input(ctx, args.path, args.headers, args.evbuf_io, PROBE_TYPE_DEFAULT);
     }
   else
-    ret = open_input(ctx, args.path, args.evbuf_io, PROBE_TYPE_DEFAULT);
+    ret = open_input(ctx, args.path, NULL, args.evbuf_io, PROBE_TYPE_DEFAULT);
 
   if (ret < 0)
     goto fail_free;
