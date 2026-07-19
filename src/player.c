@@ -376,6 +376,9 @@ static void
 idle_resync_device_cb(struct output_device *device, enum output_device_state status);
 
 static void
+channels_set_stop_cb(struct output_device *device, enum output_device_state status);
+
+static void
 idle_resync_timer_arm(void);
 
 static void
@@ -1753,6 +1756,37 @@ device_activate_cb(struct output_device *device, enum output_device_state status
   commands_exec_end(cmdbase, retval);
 }
 
+// Completion callback for the stop half of speaker_channels_set()'s reconnect.
+// Unlike offset_ms, which master session (and thus which channel transform) a
+// RAOP/AirPlay device uses is decided only at connect time, so a channels
+// change needs a real reconnect to take effect - not just "next time you
+// start playback". outputs_device_stop() is async for AirPlay/RAOP: device->
+// session is only cleared once it genuinely completes, so start the restart
+// from here rather than racing it. This command IS the owning command (unlike
+// the timer-driven idle-resync), so device_activate_cb resolving cmdbase once
+// the restart itself completes is correct - don't resolve it here.
+static void
+channels_set_stop_cb(struct output_device *device, enum output_device_state status)
+{
+  int retval;
+  int ret;
+
+  if (!device)
+    {
+      DPRINTF(E_WARN, L_PLAYER, "Output device disappeared before channels-change reconnect completed!\n");
+
+      retval = commands_exec_returnvalue(cmdbase);
+      if (retval != -2)
+	retval = -1;
+      commands_exec_end(cmdbase, retval);
+      return;
+    }
+
+  ret = outputs_device_start(device, device_activate_cb, false);
+  if (ret <= 0)
+    device_activate_cb(device, OUTPUT_STATE_CONNECTED); // no async completion coming, resolve now
+}
+
 // Completion callback for the async stop half of the idle-resync reconnect (see
 // idle_resync_cb()). Fires once outputs_device_stop() has genuinely completed and
 // device->session has been cleared, and only then starts the reconnect - so the
@@ -1801,6 +1835,8 @@ player_pmap(void *p)
     return "idle_resync_stop_cb";
   else if (p == idle_resync_device_cb)
     return "idle_resync_device_cb";
+  else if (p == channels_set_stop_cb)
+    return "channels_set_stop_cb";
   else
     return "unknown";
 }
@@ -3097,12 +3133,13 @@ speaker_channels_set(void *arg, int *retval)
 
   device->channels = param->channels;
 
-  // Same rationale as speaker_offset_ms_set: can't change mid-playback, but
-  // if paused we stop the session so the new mode takes effect on restart
-  if (player_state == PLAY_PAUSED)
-    *retval = outputs_device_stop(device, device_shutdown_cb);
-  else
-    *retval = 0;
+  // Unlike offset_ms, which master session (and thus which channel transform)
+  // a RAOP/AirPlay device uses is decided only at connect time - waiting for
+  // a pause (like speaker_offset_ms_set does) would mean the change silently
+  // has no audible effect for as long as playback continues. Reconnect right
+  // away regardless of play state; channels_set_stop_cb chains the restart
+  // once outputs_device_stop() (async for AirPlay/RAOP) genuinely completes.
+  *retval = outputs_device_stop(device, channels_set_stop_cb);
 
   if (*retval > 0)
     return COMMAND_PENDING; // async

@@ -22,8 +22,8 @@
         @change="changeVolume"
       />
       <control-dropdown
+        v-if="output.selected"
         v-model:value="channels"
-        :disabled="!output.selected"
         :options="channelsOptions"
         @update:value="changeChannels"
       />
@@ -45,7 +45,7 @@ const volume = ref(props.output.volume)
 const channels = ref(props.output.channels)
 
 const channelsOptions = [
-  { id: 'both', name: 'Both' },
+  { id: 'both', name: 'Not set' },
   { id: 'left', name: 'Left' },
   { id: 'right', name: 'Right' }
 ]
