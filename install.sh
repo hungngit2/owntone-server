@@ -7,7 +7,7 @@
 # Rollback: see the "ROLLBACK" comment block at the end of this file.
 set -euo pipefail
 
-GITHUB_REPO="${OWNTONE_FORK_REPO:-owntone/owntone-server}"   # override via env if this is a fork
+GITHUB_REPO="${OWNTONE_FORK_REPO:-hungngit2/owntone-server}"   # override via env for a different fork/upstream
 PINNED_VERSION="${OWNTONE_INSTALL_VERSION:-}"                # set to pin, default = latest release
 EXISTING_CONF="${OWNTONE_EXISTING_CONF:-/opt/docker/owntone/config/owntone.conf}"
 DOCKER_COMPOSE_DIR="${OWNTONE_DOCKER_COMPOSE_DIR:-/opt/docker/owntone}"
