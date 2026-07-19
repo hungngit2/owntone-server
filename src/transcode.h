@@ -70,6 +70,10 @@ struct transcode_decode_setup_args
   enum transcode_profile profile;
   struct media_quality *quality;
   bool is_http;
+  // Already-formatted "Key: Value\r\nKey2: Value2" string, or NULL for none.
+  // Only meaningful when is_http is true. Not copied/stored anywhere past
+  // open_input() -- av_dict_set() below copies it into ffmpeg's own AVDictionary.
+  const char *headers;
   uint32_t len_ms;
 
   // Source must be either of these
