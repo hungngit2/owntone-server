@@ -45,7 +45,7 @@ const volume = ref(props.output.volume)
 const channels = ref(props.output.channels)
 
 const channelsOptions = [
-  { id: 'both', name: 'Not set' },
+  { id: 'unset', name: 'Not set' },
   { id: 'left', name: 'Left' },
   { id: 'right', name: 'Right' }
 ]

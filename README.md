@@ -23,7 +23,7 @@ mt-daapd (Firefly Media Server).
 This fork adds a per-output **channel selector** (both/left/right), so two
 outputs (e.g. two AirPlay speakers) can be configured as a real stereo pair —
 one playing the left channel, the other the right. Configure it per output in
-`owntone.conf` (`channels = "both" | "left" | "right"` in an `audio {}`,
+`owntone.conf` (`channels = "unset" | "left" | "right"` in an `audio {}`,
 `alsa "name" {}`, `airplay "name" {}`, or `fifo {}` block), via the web UI's
 outputs panel, or via the JSON API (`"channels"` field on `/api/outputs`).
 

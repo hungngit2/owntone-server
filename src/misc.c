@@ -1975,7 +1975,7 @@ output_channels_to_string(enum output_channels channels)
   if (channels == OUTPUT_CHANNELS_RIGHT)
     return "right";
 
-  return "both";
+  return "unset";
 }
 
 void
