@@ -2328,12 +2328,13 @@ queue_item_to_json(struct db_queue_item *queue_item, char shuffle)
   json_object_object_add(item, "bitrate", json_object_new_int(queue_item->bitrate));
   json_object_object_add(item, "samplerate", json_object_new_int(queue_item->samplerate));
   json_object_object_add(item, "channels", json_object_new_int(queue_item->channels));
+  safe_json_add_string(item, "headers", queue_item->headers);
 
   return item;
 }
 
 static int
-queue_tracks_add_byuris(const char *param, char shuffle, uint32_t item_id, int pos, int *total_count, int *new_item_id)
+queue_tracks_add_byuris(const char *param, const char *headers, char shuffle, uint32_t item_id, int pos, int *total_count, int *new_item_id)
 {
   char *uris;
   const char *uri;
@@ -2356,7 +2357,7 @@ queue_tracks_add_byuris(const char *param, char shuffle, uint32_t item_id, int p
 
   for (; uri; uri = strtok_r(NULL, ",", &ptr))
     {
-      ret = library_queue_item_add(uri, pos, shuffle, item_id, NULL, &count, &new);
+      ret = library_queue_item_add(uri, pos, shuffle, item_id, headers, &count, &new);
       if (ret != LIBRARY_OK)
 	{
 	  DPRINTF(E_LOG, L_WEB, "Invalid uri '%s'\n", uri);
@@ -2458,6 +2459,7 @@ jsonapi_reply_queue_tracks_add(struct httpd_request *hreq)
   const char *param_pos;
   const char *param_uris;
   const char *param_expression;
+  const char *param_headers;
   const char *param;
   struct player_status status;
   int pos;
@@ -2485,6 +2487,7 @@ jsonapi_reply_queue_tracks_add(struct httpd_request *hreq)
 
   param_uris = httpd_query_value_find(hreq->query, "uris");
   param_expression = httpd_query_value_find(hreq->query, "expression");
+  param_headers = httpd_query_value_find(hreq->query, "headers");
 
   if (!param_uris && !param_expression)
     {
@@ -2513,7 +2516,7 @@ jsonapi_reply_queue_tracks_add(struct httpd_request *hreq)
 
   if (param_uris)
     {
-      ret = queue_tracks_add_byuris(param_uris, status.shuffle, status.item_id, pos, &total_count, &new_item_id);
+      ret = queue_tracks_add_byuris(param_uris, param_headers, status.shuffle, status.item_id, pos, &total_count, &new_item_id);
     }
   else
     {
@@ -2626,6 +2629,8 @@ jsonapi_reply_queue_tracks_update(struct httpd_request *hreq)
     update_str(&is_changed, &queue_item->genre, param);
   if ((param = httpd_query_value_find(hreq->query, "artwork_url")))
     update_str(&is_changed, &queue_item->artwork_url, param);
+  if ((param = httpd_query_value_find(hreq->query, "headers")))
+    update_str(&is_changed, &queue_item->headers, param);
 
   if (ret != HTTP_OK)
     return ret;
