@@ -2943,8 +2943,13 @@ queue_tracks_add_byexpression(const char *param, char shuffle, uint32_t item_id,
   return ret;
 }
 
-static int
-create_reply_queue_tracks_add(struct evbuffer *evbuf, int count, int new_item_id, char shuffle)
+/* Builds the queue-items JSON reply object (version/count/items) but does not
+ * serialize it, so callers can add extra top-level keys (e.g. "skipped")
+ * before sending it. Returns NULL on failure. Caller owns the returned object
+ * and must jparse_free() it.
+ */
+static json_object *
+build_reply_queue_tracks_add(int count, int new_item_id, char shuffle)
 {
   json_object *reply = json_object_new_object();
   json_object *items = json_object_new_array();
@@ -2976,18 +2981,29 @@ create_reply_queue_tracks_add(struct evbuffer *evbuf, int count, int new_item_id
       json_object_array_add(items, item);
     }
 
-  ret = evbuffer_add_printf(evbuf, "%s", json_object_to_json_string(reply));
-  if (ret < 0)
-    goto error;
-
   db_queue_enum_end(&query_params);
-  jparse_free(reply);
-  return 0;
+  return reply;
 
  error:
   db_queue_enum_end(&query_params);
   jparse_free(reply);
-  return -1;
+  return NULL;
+}
+
+static int
+create_reply_queue_tracks_add(struct evbuffer *evbuf, int count, int new_item_id, char shuffle)
+{
+  json_object *reply;
+  int ret;
+
+  reply = build_reply_queue_tracks_add(count, new_item_id, shuffle);
+  if (!reply)
+    return -1;
+
+  ret = evbuffer_add_printf(evbuf, "%s", json_object_to_json_string(reply));
+
+  jparse_free(reply);
+  return (ret < 0) ? -1 : 0;
 }
 
 static int
@@ -3083,6 +3099,124 @@ jsonapi_reply_queue_tracks_add(struct httpd_request *hreq)
       if (ret < 0)
 	return HTTP_INTERNAL;
     }
+
+  return HTTP_OK;
+}
+
+/* POST /api/youtube/queue - resolves a batch of YouTube URLs and queues all
+ * successfully-resolved ones in a single queue-add call. URLs that fail
+ * validation or resolution are skipped (not fatal to the batch) and reported
+ * back in the "skipped" array of the reply.
+ */
+static int
+jsonapi_reply_youtube_queue(struct httpd_request *hreq)
+{
+  json_object *request = NULL;
+  json_object *urls = NULL;
+  json_object *jurl;
+  json_object *jreply = NULL;
+  json_object *skipped_urls = NULL;
+  struct player_status status;
+  const char *url;
+  char *title = NULL;
+  char *stream_url = NULL;
+  char *joined_uris = NULL;
+  char *tmp;
+  int nurls;
+  int i;
+  int total_count = 0;
+  int new_item_id = 0;
+  int ret;
+
+  request = jparse_obj_from_evbuffer(hreq->in_body);
+  if (!request)
+    {
+      DPRINTF(E_LOG, L_WEB, "Failed to parse incoming request\n");
+      return HTTP_BADREQUEST;
+    }
+
+  ret = jparse_array_from_obj(request, "urls", &urls);
+  if (ret < 0)
+    {
+      DPRINTF(E_LOG, L_WEB, "Missing or invalid 'urls' array in YouTube queue post request\n");
+      jparse_free(request);
+      return HTTP_BADREQUEST;
+    }
+
+  CHECK_NULL(L_WEB, skipped_urls = json_object_new_array());
+
+  nurls = json_object_array_length(urls);
+  for (i = 0; i < nurls; i++)
+    {
+      jurl = json_object_array_get_idx(urls, i);
+      url = (jurl && json_object_get_type(jurl) == json_type_string) ? json_object_get_string(jurl) : NULL;
+
+      if (!url || strlen(url) == 0 || !is_youtube_url(url))
+	{
+	  DPRINTF(E_LOG, L_WEB, "Skipping invalid YouTube URL in queue request: '%s'\n", url ? url : "(none)");
+	  json_object_array_add(skipped_urls, json_object_new_string(url ? url : ""));
+	  continue;
+	}
+
+      if (resolve_youtube_stream_url(url, &title, &stream_url) < 0)
+	{
+	  DPRINTF(E_LOG, L_WEB, "Failed to resolve YouTube URL '%s' for queueing\n", url);
+	  json_object_array_add(skipped_urls, json_object_new_string(url));
+	  continue;
+	}
+
+      free(title);
+      title = NULL;
+
+      if (!joined_uris)
+	joined_uris = stream_url;
+      else
+	{
+	  tmp = safe_asprintf("%s,%s", joined_uris, stream_url);
+	  free(joined_uris);
+	  free(stream_url);
+	  joined_uris = tmp;
+	}
+      stream_url = NULL;
+    }
+
+  jparse_free(request);
+
+  if (!joined_uris)
+    {
+      DPRINTF(E_LOG, L_WEB, "Could not resolve any of the given YouTube URLs for queueing\n");
+
+      CHECK_NULL(L_WEB, jreply = json_object_new_object());
+      safe_json_add_string(jreply, "error", "Could not resolve any of the given URLs");
+      json_object_object_add(jreply, "skipped", skipped_urls);
+      CHECK_ERRNO(L_WEB, evbuffer_add_printf(hreq->out_body, "%s", json_object_to_json_string(jreply)));
+
+      jparse_free(jreply);
+      return HTTP_BADREQUEST;
+    }
+
+  player_get_status(&status);
+
+  ret = queue_tracks_add_byuris(joined_uris, "Referer: https://www.youtube.com/", status.shuffle, status.item_id, -1, &total_count, &new_item_id);
+  free(joined_uris);
+  if (ret < 0)
+    {
+      jparse_free(skipped_urls);
+      return HTTP_INTERNAL;
+    }
+
+  jreply = build_reply_queue_tracks_add(total_count, new_item_id, status.shuffle);
+  if (!jreply)
+    {
+      jparse_free(skipped_urls);
+      return HTTP_INTERNAL;
+    }
+
+  json_object_object_add(jreply, "skipped", skipped_urls);
+
+  CHECK_ERRNO(L_WEB, evbuffer_add_printf(hreq->out_body, "%s", json_object_to_json_string(jreply)));
+
+  jparse_free(jreply);
 
   return HTTP_OK;
 }
@@ -5237,6 +5371,7 @@ static struct httpd_uri_map adm_handlers[] =
     { HTTPD_METHOD_GET,    "^/api/youtube$",                                jsonapi_reply_youtube },
     { HTTPD_METHOD_POST,   "^/api/youtube/resolve$",                       jsonapi_reply_youtube_resolve },
     { HTTPD_METHOD_POST,   "^/api/youtube/search$",                       jsonapi_reply_youtube_search },
+    { HTTPD_METHOD_POST,   "^/api/youtube/queue$",                        jsonapi_reply_youtube_queue },
     { HTTPD_METHOD_GET,    "^/api/pairing$",                               jsonapi_reply_pairing_get },
     { HTTPD_METHOD_POST,   "^/api/pairing$",                               jsonapi_reply_pairing_pair },
     { HTTPD_METHOD_POST,   "^/api/lastfm-login$",                          jsonapi_reply_lastfm_login },
