@@ -1651,6 +1651,7 @@ jsonapi_reply_youtube_search(struct httpd_request *hreq)
   int limit;
   int ret;
   int err;
+  const char *errmsg = NULL;
   char limit_buf[16];
 
   request = jparse_obj_from_evbuffer(hreq->in_body);
@@ -1705,6 +1706,7 @@ jsonapi_reply_youtube_search(struct httpd_request *hreq)
     {
       DPRINTF(E_LOG, L_WEB, "Failed to build YouTube search query parameters\n");
       err = HTTP_INTERNAL;
+      errmsg = "Failed to build request";
       goto error;
     }
 
@@ -1713,6 +1715,7 @@ jsonapi_reply_youtube_search(struct httpd_request *hreq)
     {
       DPRINTF(E_LOG, L_WEB, "Failed to urlencode YouTube search query parameters\n");
       err = HTTP_INTERNAL;
+      errmsg = "Failed to build request";
       goto error;
     }
 
@@ -1724,6 +1727,7 @@ jsonapi_reply_youtube_search(struct httpd_request *hreq)
     {
       DPRINTF(E_LOG, L_WEB, "Failed to allocate input body for YouTube search request\n");
       err = HTTP_INTERNAL;
+      errmsg = "Failed to build request";
       goto error;
     }
 
@@ -1732,6 +1736,7 @@ jsonapi_reply_youtube_search(struct httpd_request *hreq)
     {
       DPRINTF(E_LOG, L_WEB, "Did not get a reply from YouTube Data API\n");
       err = HTTP_INTERNAL;
+      errmsg = "YouTube API request failed";
       goto error;
     }
 
@@ -1743,6 +1748,7 @@ jsonapi_reply_youtube_search(struct httpd_request *hreq)
     {
       DPRINTF(E_LOG, L_WEB, "Empty reply from YouTube Data API\n");
       err = HTTP_INTERNAL;
+      errmsg = "Invalid response from YouTube API";
       goto error;
     }
 
@@ -1751,33 +1757,23 @@ jsonapi_reply_youtube_search(struct httpd_request *hreq)
     {
       DPRINTF(E_LOG, L_WEB, "Failed to parse YouTube Data API reply as JSON: %s\n", body);
       err = HTTP_INTERNAL;
+      errmsg = "Invalid response from YouTube API";
       goto error;
     }
 
   if (ctx.response_code < 200 || ctx.response_code >= 300)
     {
       json_object *jerror = NULL;
-      const char *message = NULL;
 
       if (json_object_object_get_ex(response, "error", &jerror))
-	message = jparse_str_from_obj(jerror, "message");
+	errmsg = jparse_str_from_obj(jerror, "message");
 
       DPRINTF(E_LOG, L_WEB, "YouTube Data API returned error status %d: %s\n", ctx.response_code, body);
 
-      CHECK_NULL(L_WEB, jreply = json_object_new_object());
-      safe_json_add_string(jreply, "error", message ? message : "YouTube Data API request failed");
-      CHECK_ERRNO(L_WEB, evbuffer_add_printf(hreq->out_body, "%s", json_object_to_json_string(jreply)));
-
-      jparse_free(jreply);
-      jparse_free(response);
-      jparse_free(request);
-      evbuffer_free(ctx.input_body);
-      free(url);
-      free(querystring);
-      keyval_clear(kv);
-      free(kv);
-      free(api_key);
-      return HTTP_INTERNAL;
+      if (!errmsg)
+	errmsg = "YouTube Data API request failed";
+      err = HTTP_INTERNAL;
+      goto error;
     }
 
   CHECK_NULL(L_WEB, jreply = json_object_new_object());
@@ -1857,6 +1853,11 @@ jsonapi_reply_youtube_search(struct httpd_request *hreq)
   return HTTP_OK;
 
  error:
+  CHECK_NULL(L_WEB, jreply = json_object_new_object());
+  safe_json_add_string(jreply, "error", errmsg ? errmsg : "Internal error");
+  CHECK_ERRNO(L_WEB, evbuffer_add_printf(hreq->out_body, "%s", json_object_to_json_string(jreply)));
+
+  jparse_free(jreply);
   jparse_free(response);
   jparse_free(request);
   if (ctx.input_body)
