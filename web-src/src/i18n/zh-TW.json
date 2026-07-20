@@ -389,9 +389,16 @@
       "user-token": "用戶令牌",
       "youtube": {
         "api-key": "YouTube API 金鑰",
+        "api-key-required": "搜尋前需要先提供 YouTube API 金鑰。",
         "configured": "YouTube 解析器已設定。",
-        "info": "提供 YouTube Data API 金鑰，讓 yt-dlp 解析公開的 YouTube 連結。",
+        "info": "提供 YouTube Data API v3 金鑰以啟用 YouTube 搜尋。",
+        "queue-all": "全部加入佇列",
+        "queued": "已加入 {count} 首曲目。",
         "resolve-failed": "無法解析 YouTube 連結。",
+        "search": "搜尋",
+        "search-failed": "YouTube 搜尋失敗。",
+        "search-placeholder": "搜尋 YouTube...",
+        "skipped": "{count} 首無法解析，已略過。",
         "title": "YouTube",
         "url-placeholder": "https://www.youtube.com/watch?v=...",
         "url-required": "需要 YouTube 連結。"

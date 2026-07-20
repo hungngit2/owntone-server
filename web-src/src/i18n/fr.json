@@ -389,9 +389,16 @@
       "user-token": "Jeton utilisateur",
       "youtube": {
         "api-key": "Clé API YouTube",
+        "api-key-required": "Une clé API YouTube est requise avant de pouvoir lancer une recherche.",
         "configured": "Le résolveur YouTube est configuré.",
-        "info": "Fournissez une clé API YouTube Data pour résoudre des liens YouTube publics via yt-dlp.",
+        "info": "Fournissez une clé API YouTube Data v3 pour activer la recherche YouTube.",
+        "queue-all": "Tout mettre en file",
+        "queued": "{count} morceau(x) ajouté(s) à la file.",
         "resolve-failed": "L’URL YouTube n’a pas pu être résolue.",
+        "search": "Rechercher",
+        "search-failed": "La recherche YouTube a échoué.",
+        "search-placeholder": "Rechercher sur YouTube...",
+        "skipped": "{count} n’ont pas pu être résolus et ont été ignorés.",
         "title": "YouTube",
         "url-placeholder": "https://www.youtube.com/watch?v=...",
         "url-required": "Une URL YouTube est requise."

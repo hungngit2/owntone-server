@@ -389,9 +389,16 @@
       "user-token": "Benutzertoken",
       "youtube": {
         "api-key": "YouTube-API-Schlüssel",
+        "api-key-required": "Ein YouTube-API-Schlüssel wird benötigt, bevor du suchen kannst.",
         "configured": "Der YouTube-Resolver ist konfiguriert.",
-        "info": "Gib einen YouTube-Data-API-Schlüssel an, um öffentliche YouTube-Links über yt-dlp aufzulösen.",
+        "info": "Gib einen YouTube-Data-API-v3-Schlüssel an, um die YouTube-Suche zu aktivieren.",
+        "queue-all": "Alle einreihen",
+        "queued": "{count} Titel eingereiht.",
         "resolve-failed": "Die YouTube-URL konnte nicht aufgelöst werden.",
+        "search": "Suchen",
+        "search-failed": "Die YouTube-Suche ist fehlgeschlagen.",
+        "search-placeholder": "YouTube durchsuchen...",
+        "skipped": "{count} konnten nicht aufgelöst werden und wurden übersprungen.",
         "title": "YouTube",
         "url-placeholder": "https://www.youtube.com/watch?v=...",
         "url-required": "Eine YouTube-URL ist erforderlich."
