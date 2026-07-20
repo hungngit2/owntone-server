@@ -393,6 +393,7 @@
         "configured": "Der YouTube-Resolver ist konfiguriert.",
         "info": "Gib einen YouTube-Data-API-v3-Schlüssel an, um die YouTube-Suche zu aktivieren.",
         "queue-all": "Alle einreihen",
+        "queue-failed": "Die ausgewählten Titel konnten nicht eingereiht werden.",
         "queued": "{count} Titel eingereiht.",
         "resolve-failed": "Die YouTube-URL konnte nicht aufgelöst werden.",
         "save-failed": "Der YouTube-API-Schlüssel konnte nicht gespeichert werden.",

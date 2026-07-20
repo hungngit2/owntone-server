@@ -393,6 +393,7 @@
         "configured": "YouTube 解析器已配置。",
         "info": "提供 YouTube Data API v3 密钥以启用 YouTube 搜索。",
         "queue-all": "全部加入队列",
+        "queue-failed": "无法将选中的曲目加入队列。",
         "queued": "已加入 {count} 首曲目。",
         "resolve-failed": "无法解析 YouTube 链接。",
         "save-failed": "无法保存 YouTube API 密钥。",

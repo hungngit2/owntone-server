@@ -393,6 +393,7 @@
         "configured": "YouTube resolver is configured.",
         "info": "Provide a YouTube Data API v3 key to enable searching YouTube.",
         "queue-all": "Queue all",
+        "queue-failed": "Failed to queue the selected tracks.",
         "queued": "Queued {count} track(s).",
         "resolve-failed": "The YouTube URL could not be resolved.",
         "save-failed": "Failed to save the YouTube API key.",
