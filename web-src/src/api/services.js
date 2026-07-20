@@ -42,11 +42,17 @@ export default {
     get() {
       return api.get('./api/youtube')
     },
+    queueAll(urls) {
+      return api.post('./api/youtube/queue', { urls })
+    },
     resolve(url) {
       return api.post('./api/youtube/resolve', { url })
     },
     saveApiKey(apiKey) {
       return api.put('./api/settings/services/youtube_api_key', { value: apiKey })
+    },
+    search(query, limit) {
+      return api.post('./api/youtube/search', { limit, query })
     }
   }
 }
