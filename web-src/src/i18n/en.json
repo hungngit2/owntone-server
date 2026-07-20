@@ -395,6 +395,7 @@
         "queue-all": "Queue all",
         "queued": "Queued {count} track(s).",
         "resolve-failed": "The YouTube URL could not be resolved.",
+        "save-failed": "Failed to save the YouTube API key.",
         "search": "Search",
         "search-failed": "The YouTube search failed.",
         "search-placeholder": "Search YouTube...",

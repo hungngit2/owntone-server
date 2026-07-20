@@ -395,6 +395,7 @@
         "queue-all": "Tout mettre en file",
         "queued": "{count} morceau(x) ajouté(s) à la file.",
         "resolve-failed": "L’URL YouTube n’a pas pu être résolue.",
+        "save-failed": "Impossible d’enregistrer la clé API YouTube.",
         "search": "Rechercher",
         "search-failed": "La recherche YouTube a échoué.",
         "search-placeholder": "Rechercher sur YouTube...",

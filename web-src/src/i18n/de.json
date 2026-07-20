@@ -395,6 +395,7 @@
         "queue-all": "Alle einreihen",
         "queued": "{count} Titel eingereiht.",
         "resolve-failed": "Die YouTube-URL konnte nicht aufgelöst werden.",
+        "save-failed": "Der YouTube-API-Schlüssel konnte nicht gespeichert werden.",
         "search": "Suchen",
         "search-failed": "Die YouTube-Suche ist fehlgeschlagen.",
         "search-placeholder": "YouTube durchsuchen...",

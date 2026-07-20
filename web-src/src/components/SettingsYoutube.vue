@@ -94,7 +94,7 @@ const saveYoutubeApiKey = async () => {
     await services.youtube.saveApiKey(youtubeApiKey.value)
     await servicesStore.initialise()
   } catch {
-    youtubeError.value = t('settings.services.youtube.search-failed')
+    youtubeError.value = t('settings.services.youtube.save-failed')
   }
 }
 

@@ -395,6 +395,7 @@
         "queue-all": "全部加入佇列",
         "queued": "已加入 {count} 首曲目。",
         "resolve-failed": "無法解析 YouTube 連結。",
+        "save-failed": "無法儲存 YouTube API 金鑰。",
         "search": "搜尋",
         "search-failed": "YouTube 搜尋失敗。",
         "search-placeholder": "搜尋 YouTube...",
