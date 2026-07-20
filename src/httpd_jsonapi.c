@@ -38,7 +38,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "httpd_internal.h"
 #include "conffile.h"
@@ -1276,80 +1279,198 @@ jsonapi_reply_meta_rescan(struct httpd_request *hreq)
  *  "oauth_uri": "https://accounts.spotify.com/authorize/?client_id=...
  * }
  */
+/* Hard wall-clock limit for the "timeout"-wrapped yt-dlp invocation below */
+#define YOUTUBE_RESOLVE_TIMEOUT_SECS 20
+#define YOUTUBE_RESOLVE_TIMEOUT_STR "20"
+
+/* Runs argv[0] (searched via PATH, no shell involved) with argv as its
+ * arguments, captures its stdout into a malloc'd, NUL-terminated buffer.
+ * Caller is expected to have wrapped the command with the "timeout" binary
+ * as argv[0] if a hard time limit is needed (see resolve_youtube_stream_url()).
+ * Returns NULL if the child could not be started, stdout could not be read,
+ * or the child exited with a non-zero status/was killed by a signal.
+ */
 static char *
-shell_quote(const char *value)
+run_argv_capture_output(char *const argv[], int timeout_secs)
 {
-  size_t len = strlen(value);
-  char *quoted;
-  char *p;
-  size_t i;
-
-  quoted = calloc(len * 4 + 3, 1);
-  if (!quoted)
-    return NULL;
-
-  p = quoted;
-  *p++ = '\'';
-  for (i = 0; i < len; i++)
-    {
-      if (value[i] == '\'')
-        {
-          memcpy(p, "'\\''", 4);
-          p += 4;
-        }
-      else
-        *p++ = value[i];
-    }
-  *p++ = '\'';
-  *p = '\0';
-
-  return quoted;
-}
-
-static char *
-run_command_capture_output(const char *command)
-{
-  FILE *pipe;
-  char buffer[4096];
-  size_t total_len = 0;
+  int outpipe[2];
+  pid_t pid;
   char *output = NULL;
+  size_t total_len = 0;
+  char buffer[4096];
+  ssize_t n;
+  int status;
 
-  pipe = popen(command, "r");
-  if (!pipe)
-    return NULL;
-
-  while (fgets(buffer, sizeof(buffer), pipe) != NULL)
+  if (pipe(outpipe) < 0)
     {
-      size_t chunk_len = strlen(buffer);
-      char *tmp = realloc(output, total_len + chunk_len + 1);
+      DPRINTF(E_LOG, L_WEB, "Could not create pipe for '%s': %s\n", argv[0], strerror(errno));
+      return NULL;
+    }
 
+  pid = fork();
+  if (pid < 0)
+    {
+      DPRINTF(E_LOG, L_WEB, "Could not fork to run '%s': %s\n", argv[0], strerror(errno));
+      close(outpipe[0]);
+      close(outpipe[1]);
+      return NULL;
+    }
+
+  if (pid == 0)
+    {
+      /* Child */
+      close(outpipe[0]);
+      if (dup2(outpipe[1], STDOUT_FILENO) < 0)
+        _exit(127);
+      close(outpipe[1]);
+
+      execvp(argv[0], argv);
+      _exit(127); /* execvp only returns on failure */
+    }
+
+  /* Parent */
+  close(outpipe[1]);
+
+  while ((n = read(outpipe[0], buffer, sizeof(buffer))) > 0)
+    {
+      char *tmp = realloc(output, total_len + n + 1);
       if (!tmp)
         {
+          DPRINTF(E_LOG, L_WEB, "Out of memory reading output of '%s'\n", argv[0]);
           free(output);
-          pclose(pipe);
-          return NULL;
+          output = NULL;
+          break;
         }
 
       output = tmp;
-      memcpy(output + total_len, buffer, chunk_len);
-      total_len += chunk_len;
+      memcpy(output + total_len, buffer, n);
+      total_len += n;
       output[total_len] = '\0';
     }
 
-  if (pclose(pipe) != 0)
+  close(outpipe[0]);
+
+  if (waitpid(pid, &status, 0) < 0)
     {
+      DPRINTF(E_LOG, L_WEB, "waitpid() failed for '%s': %s\n", argv[0], strerror(errno));
       free(output);
       return NULL;
     }
 
-  if (output)
+  if (n < 0)
     {
-      char *newline = strpbrk(output, "\r\n");
-      if (newline)
-        *newline = '\0';
+      DPRINTF(E_LOG, L_WEB, "Error reading output of '%s': %s\n", argv[0], strerror(errno));
+      free(output);
+      return NULL;
+    }
+
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+    {
+      DPRINTF(E_LOG, L_WEB, "'%s' exited with an error (timeout %ds)\n", argv[0], timeout_secs);
+      free(output);
+      return NULL;
     }
 
   return output;
+}
+
+/* Returns true only for recognised YouTube video URL shapes:
+ *   http(s)://[www.]youtube.com/watch?v=...
+ *   http(s)://youtu.be/...
+ *   http(s)://[www.]youtube.com/shorts/...
+ * Host match is case-insensitive; this is a simple prefix check, not a full
+ * URL parser.
+ */
+static bool
+is_youtube_url(const char *url)
+{
+  const char *p = url;
+
+  if (strncasecmp(p, "http://", 7) == 0)
+    p += 7;
+  else if (strncasecmp(p, "https://", 8) == 0)
+    p += 8;
+  else
+    return false;
+
+  if (strncasecmp(p, "www.", 4) == 0)
+    p += 4;
+
+  if (strncasecmp(p, "youtube.com/watch?v=", 20) == 0)
+    return (strlen(p + 20) > 0);
+
+  if (strncasecmp(p, "youtube.com/shorts/", 19) == 0)
+    return (strlen(p + 19) > 0);
+
+  if (strncasecmp(p, "youtu.be/", 9) == 0)
+    return (strlen(p + 9) > 0);
+
+  return false;
+}
+
+/* Resolves a validated YouTube URL to a title and a playable stream URL by
+ * shelling out to yt-dlp (via run_argv_capture_output(), no shell parsing).
+ * On success returns 0 and sets *title and *stream_url to malloc'd strings
+ * that the caller must free. On failure returns -1 and leaves *title and
+ * *stream_url untouched.
+ *
+ * Exposed (non-static-only in intent) so a future search/queue-all endpoint
+ * can call it directly instead of duplicating the yt-dlp invocation.
+ */
+static int
+resolve_youtube_stream_url(const char *url, char **title, char **stream_url)
+{
+  char *argv[] = {
+    "timeout", YOUTUBE_RESOLVE_TIMEOUT_STR,
+    "yt-dlp", "--no-warnings", "--skip-download",
+    "-f", "bestaudio/best",
+    "--print", "%(title)s",
+    "--print", "%(urls)s",
+    (char *)url,
+    NULL
+  };
+  char *output;
+  char *sep;
+
+  output = run_argv_capture_output(argv, YOUTUBE_RESOLVE_TIMEOUT_SECS);
+  if (!output)
+    return -1;
+
+  sep = strchr(output, '\n');
+  if (!sep)
+    {
+      DPRINTF(E_LOG, L_WEB, "Unexpected yt-dlp output for '%s' (missing title/url separator)\n", url);
+      free(output);
+      return -1;
+    }
+
+  *sep = '\0';
+
+  *title = output;
+  *stream_url = strdup(sep + 1);
+  if (!*stream_url)
+    {
+      free(*title);
+      *title = NULL;
+      return -1;
+    }
+
+  /* Trim a single trailing newline (and stray CR) yt-dlp appends after the URL */
+  sep = strpbrk(*stream_url, "\r\n");
+  if (sep)
+    *sep = '\0';
+
+  if (strlen(*title) == 0 || strlen(*stream_url) == 0)
+    {
+      DPRINTF(E_LOG, L_WEB, "yt-dlp returned an empty title or stream URL for '%s'\n", url);
+      free(*title);
+      free(*stream_url);
+      *title = NULL;
+      *stream_url = NULL;
+      return -1;
+    }
+
+  return 0;
 }
 
 static int
@@ -1452,16 +1573,9 @@ jsonapi_reply_youtube_resolve(struct httpd_request *hreq)
   json_object *request;
   json_object *jreply;
   const char *url;
-  struct settings_category *services_category;
-  struct settings_option *api_key_option;
-  char *api_key = NULL;
-  char *quoted_url = NULL;
-  char *title_command = NULL;
-  char *stream_command = NULL;
   char *title = NULL;
   char *stream_url = NULL;
-  bool success = false;
-  int ret;
+  bool success;
 
   request = jparse_obj_from_evbuffer(hreq->in_body);
   if (!request)
@@ -1478,55 +1592,21 @@ jsonapi_reply_youtube_resolve(struct httpd_request *hreq)
       return HTTP_BADREQUEST;
     }
 
-  services_category = settings_category_get("services");
-  api_key_option = services_category ? settings_option_get(services_category, "youtube_api_key") : NULL;
-  if (api_key_option)
-    api_key = settings_option_getstr(api_key_option);
+  if (!is_youtube_url(url))
+    {
+      DPRINTF(E_LOG, L_WEB, "Rejecting YouTube resolve request for non-YouTube URL '%s'\n", url);
 
-  if (api_key && strlen(api_key) > 0)
-    {
-      setenv("YOUTUBE_API_KEY", api_key, 1);
-      setenv("YT_API_KEY", api_key, 1);
-    }
-  else
-    {
-      unsetenv("YOUTUBE_API_KEY");
-      unsetenv("YT_API_KEY");
-    }
+      CHECK_NULL(L_WEB, jreply = json_object_new_object());
+      json_object_object_add(jreply, "success", json_object_new_boolean(false));
+      safe_json_add_string(jreply, "error", "Not a valid YouTube URL");
+      CHECK_ERRNO(L_WEB, evbuffer_add_printf(hreq->out_body, "%s", json_object_to_json_string(jreply)));
 
-  quoted_url = shell_quote(url);
-  if (!quoted_url)
-    {
-      DPRINTF(E_LOG, L_WEB, "Failed to allocate shell-escaped YouTube URL\n");
+      jparse_free(jreply);
       jparse_free(request);
-      free(api_key);
-      return HTTP_INTERNAL;
+      return HTTP_BADREQUEST;
     }
 
-  ret = asprintf(&title_command, "yt-dlp --no-warnings --print '%%(title)s' %s", quoted_url);
-  if (ret < 0 || !title_command)
-    {
-      DPRINTF(E_LOG, L_WEB, "Failed to build title command\n");
-      jparse_free(request);
-      free(api_key);
-      free(quoted_url);
-      return HTTP_INTERNAL;
-    }
-
-  ret = asprintf(&stream_command, "yt-dlp --no-warnings -f best -g %s", quoted_url);
-  if (ret < 0 || !stream_command)
-    {
-      DPRINTF(E_LOG, L_WEB, "Failed to build stream command\n");
-      jparse_free(request);
-      free(api_key);
-      free(quoted_url);
-      free(title_command);
-      return HTTP_INTERNAL;
-    }
-
-  title = run_command_capture_output(title_command);
-  stream_url = run_command_capture_output(stream_command);
-  success = (title && strlen(title) > 0 && stream_url && strlen(stream_url) > 0);
+  success = (resolve_youtube_stream_url(url, &title, &stream_url) == 0);
 
   CHECK_NULL(L_WEB, jreply = json_object_new_object());
   json_object_object_add(jreply, "success", json_object_new_boolean(success));
@@ -1541,10 +1621,6 @@ jsonapi_reply_youtube_resolve(struct httpd_request *hreq)
 
   free(title);
   free(stream_url);
-  free(title_command);
-  free(stream_command);
-  free(quoted_url);
-  free(api_key);
   jparse_free(request);
   jparse_free(jreply);
 
