@@ -46,6 +46,7 @@
 #include "httpd_internal.h"
 #include "conffile.h"
 #include "db.h"
+#include "http.h"
 #ifdef LASTFM
 # include "lastfm.h"
 #endif
@@ -1626,6 +1627,255 @@ jsonapi_reply_youtube_resolve(struct httpd_request *hreq)
 
   return HTTP_OK;
 }
+
+#define YOUTUBE_SEARCH_DEFAULT_LIMIT 15
+#define YOUTUBE_SEARCH_MIN_LIMIT 1
+#define YOUTUBE_SEARCH_MAX_LIMIT 25
+
+static int
+jsonapi_reply_youtube_search(struct httpd_request *hreq)
+{
+  json_object *request = NULL;
+  json_object *jreply = NULL;
+  json_object *jresults = NULL;
+  json_object *response = NULL;
+  struct settings_category *services_category;
+  struct settings_option *api_key_option;
+  char *api_key = NULL;
+  struct keyval *kv = NULL;
+  char *querystring = NULL;
+  char *url = NULL;
+  struct http_client_ctx ctx = { 0 };
+  const char *query;
+  const char *body;
+  int limit;
+  int ret;
+  int err;
+  char limit_buf[16];
+
+  request = jparse_obj_from_evbuffer(hreq->in_body);
+  if (!request)
+    {
+      DPRINTF(E_LOG, L_WEB, "Failed to parse incoming request\n");
+      return HTTP_BADREQUEST;
+    }
+
+  query = jparse_str_from_obj(request, "query");
+  if (!query || strlen(query) == 0)
+    {
+      DPRINTF(E_LOG, L_WEB, "No query in YouTube search post request\n");
+      jparse_free(request);
+      return HTTP_BADREQUEST;
+    }
+
+  limit = jparse_int_from_obj(request, "limit");
+  if (limit <= 0)
+    limit = YOUTUBE_SEARCH_DEFAULT_LIMIT;
+  if (limit < YOUTUBE_SEARCH_MIN_LIMIT)
+    limit = YOUTUBE_SEARCH_MIN_LIMIT;
+  else if (limit > YOUTUBE_SEARCH_MAX_LIMIT)
+    limit = YOUTUBE_SEARCH_MAX_LIMIT;
+
+  services_category = settings_category_get("services");
+  api_key_option = services_category ? settings_option_get(services_category, "youtube_api_key") : NULL;
+  api_key = api_key_option ? settings_option_getstr(api_key_option) : NULL;
+
+  if (!api_key || strlen(api_key) == 0)
+    {
+      DPRINTF(E_LOG, L_WEB, "YouTube search request, but no API key is configured\n");
+
+      CHECK_NULL(L_WEB, jreply = json_object_new_object());
+      safe_json_add_string(jreply, "error", "YouTube API key is not configured");
+      CHECK_ERRNO(L_WEB, evbuffer_add_printf(hreq->out_body, "%s", json_object_to_json_string(jreply)));
+
+      jparse_free(jreply);
+      jparse_free(request);
+      free(api_key);
+      return HTTP_BADREQUEST;
+    }
+
+  snprintf(limit_buf, sizeof(limit_buf), "%d", limit);
+
+  CHECK_NULL(L_WEB, kv = keyval_alloc());
+  if (keyval_add(kv, "part", "snippet") < 0
+      || keyval_add(kv, "type", "video") < 0
+      || keyval_add(kv, "maxResults", limit_buf) < 0
+      || keyval_add(kv, "q", query) < 0
+      || keyval_add(kv, "key", api_key) < 0)
+    {
+      DPRINTF(E_LOG, L_WEB, "Failed to build YouTube search query parameters\n");
+      err = HTTP_INTERNAL;
+      goto error;
+    }
+
+  querystring = http_form_urlencode(kv);
+  if (!querystring)
+    {
+      DPRINTF(E_LOG, L_WEB, "Failed to urlencode YouTube search query parameters\n");
+      err = HTTP_INTERNAL;
+      goto error;
+    }
+
+  url = safe_asprintf("https://www.googleapis.com/youtube/v3/search?%s", querystring);
+
+  ctx.url = url;
+  ctx.input_body = evbuffer_new();
+  if (!ctx.input_body)
+    {
+      DPRINTF(E_LOG, L_WEB, "Failed to allocate input body for YouTube search request\n");
+      err = HTTP_INTERNAL;
+      goto error;
+    }
+
+  ret = http_client_request(&ctx, NULL);
+  if (ret < 0)
+    {
+      DPRINTF(E_LOG, L_WEB, "Did not get a reply from YouTube Data API\n");
+      err = HTTP_INTERNAL;
+      goto error;
+    }
+
+  // 0-terminate for safety
+  evbuffer_add(ctx.input_body, "", 1);
+
+  body = (char *)evbuffer_pullup(ctx.input_body, -1);
+  if (!body || strlen(body) == 0)
+    {
+      DPRINTF(E_LOG, L_WEB, "Empty reply from YouTube Data API\n");
+      err = HTTP_INTERNAL;
+      goto error;
+    }
+
+  response = json_tokener_parse(body);
+  if (!response)
+    {
+      DPRINTF(E_LOG, L_WEB, "Failed to parse YouTube Data API reply as JSON: %s\n", body);
+      err = HTTP_INTERNAL;
+      goto error;
+    }
+
+  if (ctx.response_code < 200 || ctx.response_code >= 300)
+    {
+      json_object *jerror = NULL;
+      const char *message = NULL;
+
+      if (json_object_object_get_ex(response, "error", &jerror))
+	message = jparse_str_from_obj(jerror, "message");
+
+      DPRINTF(E_LOG, L_WEB, "YouTube Data API returned error status %d: %s\n", ctx.response_code, body);
+
+      CHECK_NULL(L_WEB, jreply = json_object_new_object());
+      safe_json_add_string(jreply, "error", message ? message : "YouTube Data API request failed");
+      CHECK_ERRNO(L_WEB, evbuffer_add_printf(hreq->out_body, "%s", json_object_to_json_string(jreply)));
+
+      jparse_free(jreply);
+      jparse_free(response);
+      jparse_free(request);
+      evbuffer_free(ctx.input_body);
+      free(url);
+      free(querystring);
+      keyval_clear(kv);
+      free(kv);
+      free(api_key);
+      return HTTP_INTERNAL;
+    }
+
+  CHECK_NULL(L_WEB, jreply = json_object_new_object());
+  CHECK_NULL(L_WEB, jresults = json_object_new_array());
+
+  {
+    json_object *items = NULL;
+    int i;
+    int count;
+
+    if (json_object_object_get_ex(response, "items", &items) && json_object_get_type(items) == json_type_array)
+      {
+	count = json_object_array_length(items);
+	for (i = 0; i < count; i++)
+	  {
+	    json_object *item = json_object_array_get_idx(items, i);
+	    json_object *jid = NULL;
+	    json_object *jsnippet = NULL;
+	    json_object *jthumbnails = NULL;
+	    json_object *jdefault_thumb = NULL;
+	    const char *video_id = NULL;
+	    const char *title = NULL;
+	    const char *channel = NULL;
+	    const char *thumbnail = NULL;
+	    json_object *jresult;
+	    char *video_url;
+
+	    if (json_object_object_get_ex(item, "id", &jid))
+	      video_id = jparse_str_from_obj(jid, "videoId");
+
+	    if (!video_id)
+	      continue;
+
+	    if (json_object_object_get_ex(item, "snippet", &jsnippet))
+	      {
+		title = jparse_str_from_obj(jsnippet, "title");
+		channel = jparse_str_from_obj(jsnippet, "channelTitle");
+
+		if (json_object_object_get_ex(jsnippet, "thumbnails", &jthumbnails)
+		    && json_object_object_get_ex(jthumbnails, "default", &jdefault_thumb))
+		  thumbnail = jparse_str_from_obj(jdefault_thumb, "url");
+	      }
+
+	    video_url = safe_asprintf("https://www.youtube.com/watch?v=%s", video_id);
+
+	    CHECK_NULL(L_WEB, jresult = json_object_new_object());
+	    safe_json_add_string(jresult, "video_id", video_id);
+	    if (title)
+	      safe_json_add_string(jresult, "title", title);
+	    if (channel)
+	      safe_json_add_string(jresult, "channel", channel);
+	    if (thumbnail)
+	      safe_json_add_string(jresult, "thumbnail", thumbnail);
+	    safe_json_add_string(jresult, "url", video_url);
+
+	    free(video_url);
+
+	    json_object_array_add(jresults, jresult);
+	  }
+      }
+  }
+
+  json_object_object_add(jreply, "results", jresults);
+
+  CHECK_ERRNO(L_WEB, evbuffer_add_printf(hreq->out_body, "%s", json_object_to_json_string(jreply)));
+
+  jparse_free(jreply);
+  jparse_free(response);
+  jparse_free(request);
+  evbuffer_free(ctx.input_body);
+  free(url);
+  free(querystring);
+  keyval_clear(kv);
+  free(kv);
+  free(api_key);
+
+  return HTTP_OK;
+
+ error:
+  jparse_free(response);
+  jparse_free(request);
+  if (ctx.input_body)
+    evbuffer_free(ctx.input_body);
+  free(url);
+  free(querystring);
+  if (kv)
+    {
+      keyval_clear(kv);
+      free(kv);
+    }
+  free(api_key);
+
+  return err;
+}
+
+#undef YOUTUBE_SEARCH_DEFAULT_LIMIT
+#undef YOUTUBE_SEARCH_MIN_LIMIT
+#undef YOUTUBE_SEARCH_MAX_LIMIT
 
 static int
 jsonapi_reply_lastfm(struct httpd_request *hreq)
@@ -4985,6 +5235,7 @@ static struct httpd_uri_map adm_handlers[] =
     { HTTPD_METHOD_GET,    "^/api/spotify$",                               jsonapi_reply_spotify },
     { HTTPD_METHOD_GET,    "^/api/youtube$",                                jsonapi_reply_youtube },
     { HTTPD_METHOD_POST,   "^/api/youtube/resolve$",                       jsonapi_reply_youtube_resolve },
+    { HTTPD_METHOD_POST,   "^/api/youtube/search$",                       jsonapi_reply_youtube_search },
     { HTTPD_METHOD_GET,    "^/api/pairing$",                               jsonapi_reply_pairing_get },
     { HTTPD_METHOD_POST,   "^/api/pairing$",                               jsonapi_reply_pairing_pair },
     { HTTPD_METHOD_POST,   "^/api/lastfm-login$",                          jsonapi_reply_lastfm_login },
