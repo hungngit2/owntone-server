@@ -204,6 +204,48 @@
       </div>
     </template>
   </content-with-heading>
+  <content-with-heading>
+    <template #heading>
+      <pane-title :content="{ title: $t('settings.services.youtube.title') }" />
+    </template>
+    <template #content>
+      <div class="notification help" v-text="$t('settings.services.youtube.info')" />
+      <div class="field is-grouped mt-5">
+        <div class="control is-expanded">
+          <input
+            v-model="youtubeApiKey"
+            class="input"
+            type="password"
+            :placeholder="$t('settings.services.youtube.api-key')"
+          />
+        </div>
+        <div class="control">
+          <button class="button" @click="saveYoutubeApiKey" v-text="$t('actions.save')" />
+        </div>
+      </div>
+      <div v-if="servicesStore.youtube.configured" class="help is-success">
+        {{ $t('settings.services.youtube.configured') }}
+      </div>
+      <div class="field is-grouped mt-5">
+        <div class="control is-expanded">
+          <input
+            v-model="youtubeUrl"
+            class="input"
+            type="text"
+            :placeholder="$t('settings.services.youtube.url-placeholder')"
+          />
+        </div>
+        <div class="control">
+          <button class="button" @click="resolveYoutubeUrl" v-text="$t('actions.play')" />
+        </div>
+      </div>
+      <div v-if="youtubeError" class="help is-danger" v-text="youtubeError" />
+      <div v-if="youtubeResult.title" class="notification help mt-5">
+        <div><strong>{{ youtubeResult.title }}</strong></div>
+        <div class="mt-2 is-family-code" v-text="youtubeResult.stream_url" />
+      </div>
+    </template>
+  </content-with-heading>
 </template>
 
 <script setup>
@@ -222,6 +264,10 @@ const lastfmCredentials = ref({ password: '', user: '' })
 const lastfmErrors = ref({ error: '', password: '', user: '' })
 const listenbrainzToken = ref('')
 const listenbrainzError = ref('')
+const youtubeApiKey = ref('')
+const youtubeUrl = ref('')
+const youtubeError = ref('')
+const youtubeResult = ref({ title: '', stream_url: '' })
 
 const loginLastfm = async () => {
   const credentials = lastfmCredentials.value
@@ -255,5 +301,30 @@ const addListenBrainzToken = async () => {
 const removeListenBrainzToken = async () => {
   await services.listenbrainz.removeToken()
   servicesStore.initialise()
+}
+
+const saveYoutubeApiKey = async () => {
+  await services.youtube.saveApiKey(youtubeApiKey.value)
+  await servicesStore.initialise()
+}
+
+const resolveYoutubeUrl = async () => {
+  youtubeError.value = ''
+  youtubeResult.value = { title: '', stream_url: '' }
+  if (!youtubeUrl.value.trim()) {
+    youtubeError.value = t('settings.services.youtube.url-required')
+    return
+  }
+
+  try {
+    const result = await services.youtube.resolve(youtubeUrl.value)
+    if (result.success) {
+      youtubeResult.value = result
+    } else {
+      youtubeError.value = result.error || t('settings.services.youtube.resolve-failed')
+    }
+  } catch (error) {
+    youtubeError.value = t('settings.services.youtube.resolve-failed')
+  }
 }
 </script>

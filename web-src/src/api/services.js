@@ -37,5 +37,16 @@ export default {
     logout() {
       return api.get('./api/spotify-logout')
     }
+  },
+  youtube: {
+    get() {
+      return api.get('./api/youtube')
+    },
+    resolve(url) {
+      return api.post('./api/youtube/resolve', { url })
+    },
+    saveApiKey(apiKey) {
+      return api.put('./api/settings/services/youtube_api_key', { value: apiKey })
+    }
   }
 }
