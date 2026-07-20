@@ -3103,10 +3103,17 @@ jsonapi_reply_queue_tracks_add(struct httpd_request *hreq)
   return HTTP_OK;
 }
 
+/* Each URL triggers a blocking yt-dlp resolve (up to ~20s) on the httpd
+ * worker thread, so cap the batch to the same max as /api/youtube/search.
+ */
+#define YOUTUBE_QUEUE_MAX_URLS 25
+
 /* POST /api/youtube/queue - resolves a batch of YouTube URLs and queues all
  * successfully-resolved ones in a single queue-add call. URLs that fail
  * validation or resolution are skipped (not fatal to the batch) and reported
- * back in the "skipped" array of the reply.
+ * back in the "skipped" array of the reply. If the batch exceeds
+ * YOUTUBE_QUEUE_MAX_URLS, only the first YOUTUBE_QUEUE_MAX_URLS are processed
+ * and the remainder are reported as skipped too.
  */
 static int
 jsonapi_reply_youtube_queue(struct httpd_request *hreq)
@@ -3122,6 +3129,7 @@ jsonapi_reply_youtube_queue(struct httpd_request *hreq)
   char *stream_url = NULL;
   char *joined_uris = NULL;
   char *tmp;
+  int total_urls;
   int nurls;
   int i;
   int total_count = 0;
@@ -3145,7 +3153,14 @@ jsonapi_reply_youtube_queue(struct httpd_request *hreq)
 
   CHECK_NULL(L_WEB, skipped_urls = json_object_new_array());
 
-  nurls = json_object_array_length(urls);
+  total_urls = json_object_array_length(urls);
+  nurls = total_urls;
+  if (nurls > YOUTUBE_QUEUE_MAX_URLS)
+    {
+      DPRINTF(E_LOG, L_WEB, "YouTube queue request has %d URLs, capping to %d and skipping the rest\n", nurls, YOUTUBE_QUEUE_MAX_URLS);
+      nurls = YOUTUBE_QUEUE_MAX_URLS;
+    }
+
   for (i = 0; i < nurls; i++)
     {
       jurl = json_object_array_get_idx(urls, i);
@@ -3178,6 +3193,14 @@ jsonapi_reply_youtube_queue(struct httpd_request *hreq)
 	  joined_uris = tmp;
 	}
       stream_url = NULL;
+    }
+
+  /* Report the URLs beyond the cap as skipped too, without attempting to resolve them */
+  for (; i < total_urls; i++)
+    {
+      jurl = json_object_array_get_idx(urls, i);
+      url = (jurl && json_object_get_type(jurl) == json_type_string) ? json_object_get_string(jurl) : NULL;
+      json_object_array_add(skipped_urls, json_object_new_string(url ? url : ""));
     }
 
   jparse_free(request);
@@ -3220,6 +3243,8 @@ jsonapi_reply_youtube_queue(struct httpd_request *hreq)
 
   return HTTP_OK;
 }
+
+#undef YOUTUBE_QUEUE_MAX_URLS
 
 static int
 update_pos(uint32_t item_id, const char *new, char shuffle)
