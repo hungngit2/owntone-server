@@ -149,7 +149,7 @@ const queueAllYoutube = async () => {
   try {
     await queueResults()
   } catch {
-    youtubeError.value = t('settings.services.youtube.search-failed')
+    youtubeError.value = t('settings.services.youtube.queue-failed')
   }
 }
 </script>
