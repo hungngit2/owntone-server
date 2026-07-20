@@ -1276,6 +1276,82 @@ jsonapi_reply_meta_rescan(struct httpd_request *hreq)
  *  "oauth_uri": "https://accounts.spotify.com/authorize/?client_id=...
  * }
  */
+static char *
+shell_quote(const char *value)
+{
+  size_t len = strlen(value);
+  char *quoted;
+  char *p;
+  size_t i;
+
+  quoted = calloc(len * 4 + 3, 1);
+  if (!quoted)
+    return NULL;
+
+  p = quoted;
+  *p++ = '\'';
+  for (i = 0; i < len; i++)
+    {
+      if (value[i] == '\'')
+        {
+          memcpy(p, "'\\''", 4);
+          p += 4;
+        }
+      else
+        *p++ = value[i];
+    }
+  *p++ = '\'';
+  *p = '\0';
+
+  return quoted;
+}
+
+static char *
+run_command_capture_output(const char *command)
+{
+  FILE *pipe;
+  char buffer[4096];
+  size_t total_len = 0;
+  char *output = NULL;
+
+  pipe = popen(command, "r");
+  if (!pipe)
+    return NULL;
+
+  while (fgets(buffer, sizeof(buffer), pipe) != NULL)
+    {
+      size_t chunk_len = strlen(buffer);
+      char *tmp = realloc(output, total_len + chunk_len + 1);
+
+      if (!tmp)
+        {
+          free(output);
+          pclose(pipe);
+          return NULL;
+        }
+
+      output = tmp;
+      memcpy(output + total_len, buffer, chunk_len);
+      total_len += chunk_len;
+      output[total_len] = '\0';
+    }
+
+  if (pclose(pipe) != 0)
+    {
+      free(output);
+      return NULL;
+    }
+
+  if (output)
+    {
+      char *newline = strpbrk(output, "\r\n");
+      if (newline)
+        *newline = '\0';
+    }
+
+  return output;
+}
+
 static int
 jsonapi_reply_spotify(struct httpd_request *hreq)
 {
@@ -1339,6 +1415,140 @@ jsonapi_reply_spotify_logout(struct httpd_request *hreq)
   spotify_logout();
 #endif
   return HTTP_NOCONTENT;
+}
+
+static int
+jsonapi_reply_youtube(struct httpd_request *hreq)
+{
+  json_object *jreply;
+  struct settings_category *services_category;
+  struct settings_option *api_key_option;
+  char *api_key;
+  bool configured = false;
+
+  services_category = settings_category_get("services");
+  api_key_option = services_category ? settings_option_get(services_category, "youtube_api_key") : NULL;
+  api_key = api_key_option ? settings_option_getstr(api_key_option) : NULL;
+
+  if (api_key && strlen(api_key) > 0)
+    configured = true;
+
+  CHECK_NULL(L_WEB, jreply = json_object_new_object());
+
+  json_object_object_add(jreply, "enabled", json_object_new_boolean(true));
+  json_object_object_add(jreply, "configured", json_object_new_boolean(configured));
+
+  CHECK_ERRNO(L_WEB, evbuffer_add_printf(hreq->out_body, "%s", json_object_to_json_string(jreply)));
+
+  jparse_free(jreply);
+  free(api_key);
+
+  return HTTP_OK;
+}
+
+static int
+jsonapi_reply_youtube_resolve(struct httpd_request *hreq)
+{
+  json_object *request;
+  json_object *jreply;
+  const char *url;
+  struct settings_category *services_category;
+  struct settings_option *api_key_option;
+  char *api_key = NULL;
+  char *quoted_url = NULL;
+  char *title_command = NULL;
+  char *stream_command = NULL;
+  char *title = NULL;
+  char *stream_url = NULL;
+  bool success = false;
+  int ret;
+
+  request = jparse_obj_from_evbuffer(hreq->in_body);
+  if (!request)
+    {
+      DPRINTF(E_LOG, L_WEB, "Failed to parse incoming request\n");
+      return HTTP_BADREQUEST;
+    }
+
+  url = jparse_str_from_obj(request, "url");
+  if (!url || strlen(url) == 0)
+    {
+      DPRINTF(E_LOG, L_WEB, "No URL in YouTube resolve post request\n");
+      jparse_free(request);
+      return HTTP_BADREQUEST;
+    }
+
+  services_category = settings_category_get("services");
+  api_key_option = services_category ? settings_option_get(services_category, "youtube_api_key") : NULL;
+  if (api_key_option)
+    api_key = settings_option_getstr(api_key_option);
+
+  if (api_key && strlen(api_key) > 0)
+    {
+      setenv("YOUTUBE_API_KEY", api_key, 1);
+      setenv("YT_API_KEY", api_key, 1);
+    }
+  else
+    {
+      unsetenv("YOUTUBE_API_KEY");
+      unsetenv("YT_API_KEY");
+    }
+
+  quoted_url = shell_quote(url);
+  if (!quoted_url)
+    {
+      DPRINTF(E_LOG, L_WEB, "Failed to allocate shell-escaped YouTube URL\n");
+      jparse_free(request);
+      free(api_key);
+      return HTTP_INTERNAL;
+    }
+
+  ret = asprintf(&title_command, "yt-dlp --no-warnings --print '%%(title)s' %s", quoted_url);
+  if (ret < 0 || !title_command)
+    {
+      DPRINTF(E_LOG, L_WEB, "Failed to build title command\n");
+      jparse_free(request);
+      free(api_key);
+      free(quoted_url);
+      return HTTP_INTERNAL;
+    }
+
+  ret = asprintf(&stream_command, "yt-dlp --no-warnings -f best -g %s", quoted_url);
+  if (ret < 0 || !stream_command)
+    {
+      DPRINTF(E_LOG, L_WEB, "Failed to build stream command\n");
+      jparse_free(request);
+      free(api_key);
+      free(quoted_url);
+      free(title_command);
+      return HTTP_INTERNAL;
+    }
+
+  title = run_command_capture_output(title_command);
+  stream_url = run_command_capture_output(stream_command);
+  success = (title && strlen(title) > 0 && stream_url && strlen(stream_url) > 0);
+
+  CHECK_NULL(L_WEB, jreply = json_object_new_object());
+  json_object_object_add(jreply, "success", json_object_new_boolean(success));
+  if (title)
+    safe_json_add_string(jreply, "title", title);
+  if (stream_url)
+    safe_json_add_string(jreply, "stream_url", stream_url);
+  if (!success)
+    safe_json_add_string(jreply, "error", "Failed to resolve YouTube URL");
+
+  CHECK_ERRNO(L_WEB, evbuffer_add_printf(hreq->out_body, "%s", json_object_to_json_string(jreply)));
+
+  free(title);
+  free(stream_url);
+  free(title_command);
+  free(stream_command);
+  free(quoted_url);
+  free(api_key);
+  jparse_free(request);
+  jparse_free(jreply);
+
+  return HTTP_OK;
 }
 
 static int
@@ -4697,6 +4907,8 @@ static struct httpd_uri_map adm_handlers[] =
     { HTTPD_METHOD_PUT,    "^/api/rescan$",                                jsonapi_reply_meta_rescan },
     { HTTPD_METHOD_GET,    "^/api/spotify-logout$",                        jsonapi_reply_spotify_logout },
     { HTTPD_METHOD_GET,    "^/api/spotify$",                               jsonapi_reply_spotify },
+    { HTTPD_METHOD_GET,    "^/api/youtube$",                                jsonapi_reply_youtube },
+    { HTTPD_METHOD_POST,   "^/api/youtube/resolve$",                       jsonapi_reply_youtube_resolve },
     { HTTPD_METHOD_GET,    "^/api/pairing$",                               jsonapi_reply_pairing_get },
     { HTTPD_METHOD_POST,   "^/api/pairing$",                               jsonapi_reply_pairing_pair },
     { HTTPD_METHOD_POST,   "^/api/lastfm-login$",                          jsonapi_reply_lastfm_login },

@@ -4,14 +4,16 @@ import services from '@/api/services'
 export const useServicesStore = defineStore('ServicesStore', {
   actions: {
     async initialise() {
-      const [lastfm, listenbrainz, spotify] = await Promise.all([
+      const [lastfm, listenbrainz, spotify, youtube] = await Promise.all([
         services.lastfm.get(),
         services.listenbrainz.get(),
-        services.spotify.get()
+        services.spotify.get(),
+        services.youtube.get()
       ])
       this.lastfm = lastfm
       this.listenbrainz = listenbrainz
       this.spotify = spotify.configuration
+      this.youtube = youtube
     }
   },
   getters: {
@@ -35,5 +37,5 @@ export const useServicesStore = defineStore('ServicesStore', {
     requiredSpotifyScopes: (state) =>
       state.spotify.webapi_required_scope?.split(' ') ?? []
   },
-  state: () => ({ lastfm: {}, listenbrainz: {}, spotify: {} })
+  state: () => ({ lastfm: {}, listenbrainz: {}, spotify: {}, youtube: {} })
 })

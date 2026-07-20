@@ -386,7 +386,16 @@
         "title": "Spotify"
       },
       "username": "Benutzername",
-      "user-token": "Benutzertoken"
+      "user-token": "Benutzertoken",
+      "youtube": {
+        "api-key": "YouTube-API-Schlüssel",
+        "configured": "Der YouTube-Resolver ist konfiguriert.",
+        "info": "Gib einen YouTube-Data-API-Schlüssel an, um öffentliche YouTube-Links über yt-dlp aufzulösen.",
+        "resolve-failed": "Die YouTube-URL konnte nicht aufgelöst werden.",
+        "title": "YouTube",
+        "url-placeholder": "https://www.youtube.com/watch?v=...",
+        "url-required": "Eine YouTube-URL ist erforderlich."
+      }
     },
     "webinterface": {
       "genres": "Genres",

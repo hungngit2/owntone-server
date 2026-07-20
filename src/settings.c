@@ -58,6 +58,11 @@ static struct settings_option misc_options[] =
       { "streamurl_keywords_length", SETTINGS_TYPE_STR },
   };
 
+static struct settings_option services_options[] =
+  {
+      { "youtube_api_key", SETTINGS_TYPE_STR },
+  };
+
 static struct settings_option player_options[] =
   {
       { "player_mode_repeat", SETTINGS_TYPE_INT },
@@ -69,6 +74,7 @@ static struct settings_category categories[] =
   {
       { "webinterface", webinterface_options, ARRAY_SIZE(webinterface_options) },
       { "artwork", artwork_options, ARRAY_SIZE(artwork_options) },
+      { "services", services_options, ARRAY_SIZE(services_options) },
       { "misc", misc_options, ARRAY_SIZE(misc_options) },
       { "player", player_options, ARRAY_SIZE(player_options) },
   };

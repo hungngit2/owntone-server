@@ -386,7 +386,16 @@
         "title": "Spotify"
       },
       "username": "用戶名",
-      "user-token": "用戶令牌"
+      "user-token": "用戶令牌",
+      "youtube": {
+        "api-key": "YouTube API 金鑰",
+        "configured": "YouTube 解析器已設定。",
+        "info": "提供 YouTube Data API 金鑰，讓 yt-dlp 解析公開的 YouTube 連結。",
+        "resolve-failed": "無法解析 YouTube 連結。",
+        "title": "YouTube",
+        "url-placeholder": "https://www.youtube.com/watch?v=...",
+        "url-required": "需要 YouTube 連結。"
+      }
     },
     "webinterface": {
       "genres": "音樂類型",
