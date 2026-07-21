@@ -40,6 +40,7 @@ import PageQueue from '@/pages/PageQueue.vue'
 import PageRadioStreams from '@/pages/PageRadioStreams.vue'
 import PageSearchLibrary from '@/pages/PageSearchLibrary.vue'
 import PageSearchSpotify from '@/pages/PageSearchSpotify.vue'
+import PageSearchYoutube from '@/pages/PageSearchYoutube.vue'
 import PageSettingsArtwork from '@/pages/PageSettingsArtwork.vue'
 import PageSettingsDevices from '@/pages/PageSettingsDevices.vue'
 import PageSettingsOnlineServices from '@/pages/PageSettingsOnlineServices.vue'
@@ -247,6 +248,7 @@ export const router = createRouter({
       name: 'search-spotify',
       path: '/search/spotify'
     },
+    { component: PageSearchYoutube, name: 'search-youtube', path: '/search/youtube' },
     {
       component: PageSettingsWebinterface,
       name: 'settings-webinterface',

@@ -28,6 +28,7 @@ export const useServicesStore = defineStore('ServicesStore', {
     isListenBrainzEnabled: (state) => state.listenbrainz.enabled,
     isSpotifyActive: (state) => state.spotify.webapi_token_valid,
     isSpotifyEnabled: (state) => state.spotify.spotify_installed,
+    isYoutubeActive: (state) => state.youtube.configured,
     missingSpotifyScopes(state) {
       const scopes = new Set(state.grantedSpotifyScopes)
       return (
