@@ -19,10 +19,16 @@ set -euo pipefail
 # checking whether it's a tty). If they get an unexpected pipe instead, they
 # can fail in confusing ways (e.g. "Could not execute systemctl" from
 # deb-systemd-invoke) partway through, well after the script itself has
-# already started running. Detach unconditionally so every subprocess this
-# script spawns sees /dev/null on stdin instead, regardless of how the script
-# itself was invoked (piped or downloaded-then-run).
-exec < /dev/null
+# already started running.
+#
+# NOTE: this must NOT be done via a top-level `exec < /dev/null` here. When
+# bash is reading this very script from a pipe (not a seekable file), it
+# reads it incrementally rather than buffering the whole thing up front --
+# reassigning the script's own stdin mid-script cuts off everything bash
+# hasn't read yet, so the rest of the script silently never runs (confirmed
+# live: `bash -x` trace stopped dead right after this line, exit 0, nothing
+# after it executed). Instead, redirect stdin only on the specific
+# subprocesses below that actually need it detached.
 
 GITHUB_REPO="${OWNTONE_FORK_REPO:-hungngit2/owntone-server}"   # override via env for a different fork/upstream
 PINNED_VERSION="${OWNTONE_INSTALL_VERSION:-}"                # set to pin, default = latest release
@@ -176,11 +182,14 @@ fi
 # --- Install (or upgrade) the native package --------------------------------
 if systemctl is-active --quiet owntone.service 2>/dev/null; then
   log "Native owntone.service already running (upgrade path) — stopping it for the upgrade"
-  systemctl stop owntone.service
+  systemctl stop owntone.service < /dev/null
 fi
 
 log "Installing package..."
-dpkg -i "$TMPDIR/owntone.deb" || apt-get install -yf   # -yf pulls in missing deps, then retries the pending dpkg config
+# < /dev/null: postinst's `deb-systemd-invoke` can otherwise inherit this
+# script's own stdin (the curl pipe, when piped) and fail confusingly (e.g.
+# "Could not execute systemctl") -- see the note on stdin handling above.
+dpkg -i "$TMPDIR/owntone.deb" < /dev/null || apt-get install -yf < /dev/null   # -yf pulls in missing deps, then retries the pending dpkg config
 log "Package install succeeded"
 
 # postinst may run 'deb-systemd-invoke restart owntone.service' as part of
@@ -188,7 +197,7 @@ log "Package install succeeded"
 # point, both could momentarily fight over the same port. Stop the
 # just-(re)started native service now, before we touch Docker or adopt the
 # real config, so there's no race.
-systemctl stop owntone.service 2>/dev/null || true
+systemctl stop owntone.service < /dev/null 2>/dev/null || true
 
 # --- Only now that the native package is confirmed installed, tear down ----
 # --- the old Docker deployment. If dpkg -i had failed above, set -e would --
@@ -221,8 +230,8 @@ elif [ -f /etc/owntone.conf.from-docker ]; then
 fi
 
 log "Enabling and starting owntone.service"
-systemctl enable owntone.service
-systemctl restart owntone.service
+systemctl enable owntone.service < /dev/null
+systemctl restart owntone.service < /dev/null
 
 sleep 2
 if systemctl is-active --quiet owntone.service; then
