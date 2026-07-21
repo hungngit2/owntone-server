@@ -1,5 +1,5 @@
 <template>
-  <section v-if="servicesStore.isSpotifyActive">
+  <section v-if="servicesStore.isSpotifyActive || servicesStore.isYoutubeActive">
     <div class="container">
       <div class="columns is-centered">
         <div class="column is-four-fifths">
@@ -25,6 +25,17 @@
                   <span v-text="$t('page.search.tabs.spotify')" />
                 </a>
               </li>
+              <li
+                v-if="servicesStore.isYoutubeActive"
+                :class="{
+                  'is-active': $route.name === 'search-youtube'
+                }"
+              >
+                <a @click="$emit('search-youtube')">
+                  <mdicon class="icon is-small" name="youtube" size="16" />
+                  <span v-text="$t('page.search.tabs.youtube')" />
+                </a>
+              </li>
             </ul>
           </div>
         </div>
@@ -38,5 +49,5 @@ import { useServicesStore } from '@/stores/services'
 
 const servicesStore = useServicesStore()
 
-defineEmits(['search-library', 'search-spotify'])
+defineEmits(['search-library', 'search-spotify', 'search-youtube'])
 </script>

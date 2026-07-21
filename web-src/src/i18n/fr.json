@@ -257,9 +257,17 @@
       "show-tracks": "Afficher la piste|Afficher les {count} pistes",
       "tabs": {
         "library": "Bibliothèque",
-        "spotify": "Spotify"
+        "spotify": "Spotify",
+        "youtube": "YouTube"
       },
-      "tracks": "Pistes"
+      "tracks": "Pistes",
+      "youtube": {
+        "queue-all": "Tout mettre en file",
+        "queue-failed": "Échec de la mise en file des pistes sélectionnées.",
+        "queued": "{count} piste(s) mise(s) en file.",
+        "search-failed": "La recherche YouTube a échoué.",
+        "skipped": "{count} n'ont pas pu être résolues et ont été ignorées."
+      }
     },
     "settings": {
       "tabs": {
@@ -392,15 +400,10 @@
         "api-key-required": "Une clé API YouTube est requise avant de pouvoir lancer une recherche.",
         "configured": "Le résolveur YouTube est configuré.",
         "info": "Fournissez une clé API YouTube Data v3 pour activer la recherche YouTube.",
-        "queue-all": "Tout mettre en file",
-        "queue-failed": "Impossible d’ajouter les morceaux sélectionnés à la file.",
-        "queued": "{count} morceau(x) ajouté(s) à la file.",
         "resolve-failed": "L’URL YouTube n’a pas pu être résolue.",
         "save-failed": "Impossible d’enregistrer la clé API YouTube.",
-        "search": "Rechercher",
-        "search-failed": "La recherche YouTube a échoué.",
-        "search-placeholder": "Rechercher sur YouTube...",
-        "skipped": "{count} n’ont pas pu être résolus et ont été ignorés.",
+        "search-hint": "Une fois configurée, recherchez sur YouTube depuis l’onglet {link}.",
+        "search-hint-link": "recherche",
         "title": "YouTube",
         "url-placeholder": "https://www.youtube.com/watch?v=...",
         "url-required": "Une URL YouTube est requise."

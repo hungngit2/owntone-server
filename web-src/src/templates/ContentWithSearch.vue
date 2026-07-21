@@ -37,6 +37,7 @@
   <tabs-search
     @search-library="$emit('search-library')"
     @search-spotify="$emit('search-spotify')"
+    @search-youtube="$emit('search-youtube')"
   />
   <content-with-heading v-for="[type, items] in results" :key="type">
     <template #heading>
@@ -85,7 +86,8 @@ defineEmits([
   'search',
   'search-library',
   'search-query',
-  'search-spotify'
+  'search-spotify',
+  'search-youtube'
 ])
 
 const searchStore = useSearchStore()

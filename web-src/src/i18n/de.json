@@ -257,9 +257,17 @@
       "show-tracks": "Zeige den Track|Zeige alle {count} Tracks",
       "tabs": {
         "library": "Bibliothek",
-        "spotify": "Spotify"
+        "spotify": "Spotify",
+        "youtube": "YouTube"
       },
-      "tracks": "Tracks"
+      "tracks": "Tracks",
+      "youtube": {
+        "queue-all": "Alle einreihen",
+        "queue-failed": "Die ausgewählten Titel konnten nicht eingereiht werden.",
+        "queued": "{count} Titel eingereiht.",
+        "search-failed": "Die YouTube-Suche ist fehlgeschlagen.",
+        "skipped": "{count} konnten nicht aufgelöst werden und wurden übersprungen."
+      }
     },
     "settings": {
       "tabs": {
@@ -392,15 +400,10 @@
         "api-key-required": "Ein YouTube-API-Schlüssel wird benötigt, bevor du suchen kannst.",
         "configured": "Der YouTube-Resolver ist konfiguriert.",
         "info": "Gib einen YouTube-Data-API-v3-Schlüssel an, um die YouTube-Suche zu aktivieren.",
-        "queue-all": "Alle einreihen",
-        "queue-failed": "Die ausgewählten Titel konnten nicht eingereiht werden.",
-        "queued": "{count} Titel eingereiht.",
         "resolve-failed": "Die YouTube-URL konnte nicht aufgelöst werden.",
         "save-failed": "Der YouTube-API-Schlüssel konnte nicht gespeichert werden.",
-        "search": "Suchen",
-        "search-failed": "Die YouTube-Suche ist fehlgeschlagen.",
-        "search-placeholder": "YouTube durchsuchen...",
-        "skipped": "{count} konnten nicht aufgelöst werden und wurden übersprungen.",
+        "search-hint": "Sobald konfiguriert, kannst du YouTube über den Tab {link} durchsuchen.",
+        "search-hint-link": "Suche",
         "title": "YouTube",
         "url-placeholder": "https://www.youtube.com/watch?v=...",
         "url-required": "Eine YouTube-URL ist erforderlich."

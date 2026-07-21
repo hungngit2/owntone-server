@@ -257,9 +257,17 @@
       "show-tracks": "Show the track|Show all {count} tracks",
       "tabs": {
         "library": "Library",
-        "spotify": "Spotify"
+        "spotify": "Spotify",
+        "youtube": "YouTube"
       },
-      "tracks": "Tracks"
+      "tracks": "Tracks",
+      "youtube": {
+        "queue-all": "Queue all",
+        "queue-failed": "Failed to queue the selected tracks.",
+        "queued": "Queued {count} track(s).",
+        "search-failed": "The YouTube search failed.",
+        "skipped": "{count} could not be resolved and were skipped."
+      }
     },
     "settings": {
       "tabs": {
@@ -392,15 +400,10 @@
         "api-key-required": "A YouTube API key is required before you can search.",
         "configured": "YouTube resolver is configured.",
         "info": "Provide a YouTube Data API v3 key to enable searching YouTube.",
-        "queue-all": "Queue all",
-        "queue-failed": "Failed to queue the selected tracks.",
-        "queued": "Queued {count} track(s).",
         "resolve-failed": "The YouTube URL could not be resolved.",
         "save-failed": "Failed to save the YouTube API key.",
-        "search": "Search",
-        "search-failed": "The YouTube search failed.",
-        "search-placeholder": "Search YouTube...",
-        "skipped": "{count} could not be resolved and were skipped.",
+        "search-hint": "Once configured, search YouTube from the {link} tab.",
+        "search-hint-link": "search",
         "title": "YouTube",
         "url-placeholder": "https://www.youtube.com/watch?v=...",
         "url-required": "A YouTube URL is required."
