@@ -415,6 +415,10 @@
       }
     },
     "webinterface": {
+      "auth-password": "Password",
+      "auth-username": "Username",
+      "authentication": "Authentication",
+      "authentication-info": "Required for internet access. Local network access is exempt unless the toggle below is enabled.",
       "genres": "Genres",
       "language": "Language",
       "navigation-item-selection": "Select the top navigation bar menu items",
@@ -423,6 +427,8 @@
       "player-page": "Player page",
       "recently-added-limit": "Limit the number of albums displayed",
       "recently-added-page": "Recently added page",
+      "require-auth-lan": "Require login on local network too",
+      "require-auth-lan-needs-password": "Set a password above before enabling this.",
       "show-composer-for-genre": "Show composer only for listed genres",
       "show-composer-genres-help": "Comma-separated list of genres, for which the composer must be displayed.{0}Leave empty to always show the composer.{0}The genre tag of the current track is matched by checking, if one of the defined genres are included. For example setting to \"classical, soundtrack\" will show the composer for tracks with a genre tag of \"Contemporary Classical\"",
       "show-composer-now-playing": "Show composer",

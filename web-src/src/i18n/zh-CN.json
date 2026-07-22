@@ -415,6 +415,10 @@
       }
     },
     "webinterface": {
+      "auth-password": "密码",
+      "auth-username": "用户名",
+      "authentication": "身份验证",
+      "authentication-info": "互联网访问必须进行身份验证。除非启用下方开关，否则本地网络访问不受此限制。",
       "genres": "流派",
       "language": "语言",
       "navigation-item-selection": "选择顶部导航栏菜单项",
@@ -423,6 +427,8 @@
       "player-page": "“正在播放”页面",
       "recently-added-limit": "限制显示的相册数量",
       "recently-added-page": "“最近添加”页面",
+      "require-auth-lan": "本地网络也需要登录",
+      "require-auth-lan-needs-password": "请先在上方设置密码，然后再启用此选项。",
       "show-composer-for-genre": "仅显示列出的流派的作曲家",
       "show-composer-genres-help": "以逗号分隔的流派列表，必须显示作曲家所属的流派{0}留空以始终显示作曲家{0}通过检查是否包含定义的流派之一来匹配当前曲目的流派标签。例如，设置为“古典、原声带”将显示流派标签为“当代古典”的曲目的作曲家",
       "show-composer-now-playing": "显示作曲家",

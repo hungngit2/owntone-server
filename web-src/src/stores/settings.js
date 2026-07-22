@@ -85,6 +85,8 @@ export const useSettingsStore = defineStore('SettingsStore', {
         { id: 'dark', name: t('settings.appearance.dark') }
       ]
     },
+    hasAuthPassword: (state) =>
+      Boolean(state.get('webinterface', 'auth_password')?.value),
     locales() {
       return availableLocales.map((item) => ({
         id: item,

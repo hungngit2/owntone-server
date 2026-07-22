@@ -415,6 +415,10 @@
       }
     },
     "webinterface": {
+      "auth-password": "密碼",
+      "auth-username": "使用者名稱",
+      "authentication": "驗證",
+      "authentication-info": "透過網際網路存取時必須驗證。除非啟用下方開關，否則區域網路存取不受此限制。",
       "genres": "音樂類型",
       "language": "語言",
       "navigation-item-selection": "選擇頂部導航欄菜單項",
@@ -423,6 +427,8 @@
       "player-page": "“正在播放”頁面",
       "recently-added-limit": "限制顯示的相簿數量",
       "recently-added-page": "“最近新增”頁面",
+      "require-auth-lan": "區域網路也需要登入",
+      "require-auth-lan-needs-password": "請先在上方設定密碼，再啟用此選項。",
       "show-composer-for-genre": "僅顯示列出的音樂類型的作曲家",
       "show-composer-genres-help": "以逗號分隔的音樂類型清單，將顯示作曲家的音樂類型{0}留空以始終顯示作曲家{0}通過檢查是否包含定義的音樂類型之一來匹配當前曲目的音樂類型標籤。例如，設定為“古典、原聲帶”將顯示音樂類型標籤為“當代古典”的曲目的作曲家。",
       "show-composer-now-playing": "顯示作曲家",
