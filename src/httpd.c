@@ -42,6 +42,7 @@
 #include "logger.h"
 #include "db.h"
 #include "conffile.h"
+#include "settings.h"
 #include "misc.h"
 #include "worker.h"
 #include "evthr.h"
@@ -1378,25 +1379,52 @@ httpd_request_is_trusted(struct httpd_request *hreq)
   return httpd_backend_peer_is_trusted(hreq->backend);
 }
 
+static const char *
+httpd_auth_username(void)
+{
+  const char *username;
+
+  username = SETTINGS_GETSTR("webinterface", "auth_username");
+  if (username && *username)
+    return username;
+
+  return "admin";
+}
+
+// Falls back to the static conffile password when no DB-backed password has
+// been set yet, so existing owntone.conf-only setups keep working until the
+// user sets one via Settings > Web Interface.
+static const char *
+httpd_auth_password(void)
+{
+  const char *passwd;
+
+  passwd = SETTINGS_GETSTR("webinterface", "auth_password");
+  if (passwd && *passwd)
+    return passwd;
+
+  return cfg_getstr(cfg_getsec(cfg, "general"), "admin_password");
+}
+
 bool
 httpd_request_is_authorized(struct httpd_request *hreq)
 {
   const char *passwd;
   int ret;
 
-  if (httpd_request_is_trusted(hreq))
+  if (httpd_request_is_trusted(hreq) && !SETTINGS_GETBOOL("webinterface", "require_auth_lan"))
     return true;
 
-  passwd = cfg_getstr(cfg_getsec(cfg, "general"), "admin_password");
-  if (!passwd)
+  passwd = httpd_auth_password();
+  if (!passwd || !*passwd)
     {
-      DPRINTF(E_LOG, L_HTTPD, "Web interface request to '%s' denied: No password set in the config\n", hreq->uri);
+      DPRINTF(E_LOG, L_HTTPD, "Web interface request to '%s' denied: No password set\n", hreq->uri);
 
       httpd_send_error(hreq, HTTP_FORBIDDEN, "Forbidden");
       return false;
     }
 
-  ret = httpd_basic_auth(hreq, "admin", passwd, PACKAGE " web interface");
+  ret = httpd_basic_auth(hreq, httpd_auth_username(), passwd, PACKAGE " web interface");
   if (ret != 0)
     {
       // httpd_basic_auth has sent a reply (and logged an error, if relevant)
