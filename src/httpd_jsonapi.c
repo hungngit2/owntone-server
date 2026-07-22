@@ -1104,6 +1104,20 @@ jsonapi_reply_settings_option_put(struct httpd_request *hreq)
   else if (option->type == SETTINGS_TYPE_BOOL && jparse_contains_key(request, "value", json_type_boolean))
     {
       boolval = jparse_bool_from_obj(request, "value");
+
+      if (boolval && strcasecmp(categoryname, "webinterface") == 0 && strcasecmp(optionname, "require_auth_lan") == 0)
+	{
+	  struct settings_option *password_option = settings_option_get(category, "auth_password");
+	  const char *db_password = password_option ? settings_option_getstr(password_option) : NULL;
+	  const char *cfg_password = cfg_getstr(cfg_getsec(cfg, "general"), "admin_password");
+
+	  if ((!db_password || !*db_password) && (!cfg_password || !*cfg_password))
+	    {
+	      DPRINTF(E_LOG, L_WEB, "Refusing to enable 'require_auth_lan' with no password set\n");
+	      return HTTP_BADREQUEST;
+	    }
+	}
+
       ret = settings_option_setbool(option, boolval);
     }
   else if (option->type == SETTINGS_TYPE_STR && jparse_contains_key(request, "value", json_type_string))
