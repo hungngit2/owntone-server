@@ -55,6 +55,9 @@ jparse_str_from_obj(json_object *haystack, const char *key);
 int
 jparse_int_from_obj(json_object *haystack, const char *key);
 
+double
+jparse_double_from_obj(json_object *haystack, const char *key);
+
 int
 jparse_bool_from_obj(json_object *haystack, const char *key);
 
