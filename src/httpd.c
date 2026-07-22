@@ -1379,37 +1379,48 @@ httpd_request_is_trusted(struct httpd_request *hreq)
   return httpd_backend_peer_is_trusted(hreq->backend);
 }
 
-static const char *
+// Returns a heap-allocated string the caller must free, in every case
+// (including the fallback paths).
+static char *
 httpd_auth_username(void)
 {
-  const char *username;
+  char *username;
 
   username = SETTINGS_GETSTR("webinterface", "auth_username");
   if (username && *username)
     return username;
 
-  return "admin";
+  free(username);
+
+  return strdup("admin");
 }
 
 // Falls back to the static conffile password when no DB-backed password has
 // been set yet, so existing owntone.conf-only setups keep working until the
 // user sets one via Settings > Web Interface.
-static const char *
+// Returns a heap-allocated string the caller must free, in every case
+// (including the fallback paths).
+static char *
 httpd_auth_password(void)
 {
-  const char *passwd;
+  char *passwd;
+  const char *cfg_password;
 
   passwd = SETTINGS_GETSTR("webinterface", "auth_password");
   if (passwd && *passwd)
     return passwd;
 
-  return cfg_getstr(cfg_getsec(cfg, "general"), "admin_password");
+  free(passwd);
+
+  cfg_password = cfg_getstr(cfg_getsec(cfg, "general"), "admin_password");
+  return cfg_password ? strdup(cfg_password) : NULL;
 }
 
 bool
 httpd_request_is_authorized(struct httpd_request *hreq)
 {
-  const char *passwd;
+  char *username;
+  char *passwd;
   int ret;
 
   if (httpd_request_is_trusted(hreq) && !SETTINGS_GETBOOL("webinterface", "require_auth_lan"))
@@ -1420,11 +1431,15 @@ httpd_request_is_authorized(struct httpd_request *hreq)
     {
       DPRINTF(E_LOG, L_HTTPD, "Web interface request to '%s' denied: No password set\n", hreq->uri);
 
+      free(passwd);
       httpd_send_error(hreq, HTTP_FORBIDDEN, "Forbidden");
       return false;
     }
 
-  ret = httpd_basic_auth(hreq, httpd_auth_username(), passwd, PACKAGE " web interface");
+  username = httpd_auth_username();
+  ret = httpd_basic_auth(hreq, username, passwd, PACKAGE " web interface");
+  free(username);
+  free(passwd);
   if (ret != 0)
     {
       // httpd_basic_auth has sent a reply (and logged an error, if relevant)
