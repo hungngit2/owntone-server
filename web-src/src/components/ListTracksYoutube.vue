@@ -6,13 +6,19 @@
     :is-playable="!loadingIds.has(item.video_id)"
     :lines="[item.title, item.channel, statusText(item)]"
     @open="playNow(item)"
-    @open-details="addToQueue(item)"
+    @open-details="openDetails(item)"
+  />
+  <modal-dialog-track-youtube
+    :item="selectedItem"
+    :show="showDetailsModal"
+    @close="showDetailsModal = false"
   />
 </template>
 
 <script setup>
 import Formatters from '@/lib/Formatters'
 import ListItem from '@/components/ListItem.vue'
+import ModalDialogTrackYoutube from '@/components/ModalDialogTrackYoutube.vue'
 import api from '@/api'
 import { ref } from 'vue'
 import services from '@/api/services'
@@ -28,6 +34,8 @@ defineProps({
 const { t } = useI18n()
 const notifications = useNotificationsStore()
 const loadingIds = ref(new Set())
+const selectedItem = ref({})
+const showDetailsModal = ref(false)
 
 const durationText = (item) => {
   if (!item.duration) {
@@ -102,18 +110,8 @@ const playNow = (item) =>
     }
   })
 
-const addToQueue = (item) =>
-  withLoading(item, async () => {
-    try {
-      const { items: queued } = await services.youtube.queueAll([item.url])
-      if (queued?.length) {
-        await setQueueItemMetadata(queued[0].id, item)
-        notify(t('page.search.youtube.queued', { count: queued.length }), 'success')
-      } else {
-        notify(t('page.search.youtube.queue-failed'), 'danger')
-      }
-    } catch {
-      notify(t('page.search.youtube.queue-failed'), 'danger')
-    }
-  })
+const openDetails = (item) => {
+  selectedItem.value = item
+  showDetailsModal.value = true
+}
 </script>
