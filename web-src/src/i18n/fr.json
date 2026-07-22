@@ -263,6 +263,7 @@
       "tracks": "Pistes",
       "youtube": {
         "queue-all": "Tout mettre en file",
+        "play-failed": "Impossible de lire cette piste.",
         "queue-failed": "Échec de la mise en file des pistes sélectionnées.",
         "queued": "{count} piste(s) mise(s) en file.",
         "search-failed": "La recherche YouTube a échoué.",
@@ -398,6 +399,7 @@
       "youtube": {
         "api-key": "Clé API YouTube",
         "api-key-required": "Une clé API YouTube est requise avant de pouvoir lancer une recherche.",
+        "api-key-set-placeholder": "•••••••• (déjà définie — laisser vide pour conserver)",
         "configured": "Le résolveur YouTube est configuré.",
         "info": "Fournissez une clé API YouTube Data v3 pour activer la recherche YouTube.",
         "resolve-failed": "L’URL YouTube n’a pas pu être résolue.",

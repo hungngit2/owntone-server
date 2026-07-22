@@ -1424,7 +1424,11 @@ resolve_youtube_stream_url(const char *url, char **title, char **stream_url)
   char *argv[] = {
     "timeout", YOUTUBE_RESOLVE_TIMEOUT_STR,
     "yt-dlp", "--no-warnings", "--skip-download",
-    "-f", "bestaudio/best",
+    /* m4a/mp4 over the generic bestaudio selector (usually opus/webm):
+     * ffmpeg can't seek an opus/webm stream fetched over plain HTTP, and
+     * some webm renditions fail to open via OwnTone's http input at all,
+     * while m4a's moov-atom index makes it reliably seekable/playable. */
+    "-f", "bestaudio[ext=m4a]/bestaudio",
     "--print", "%(title)s",
     "--print", "%(urls)s",
     (char *)url,
@@ -1472,6 +1476,150 @@ resolve_youtube_stream_url(const char *url, char **title, char **stream_url)
     }
 
   return 0;
+}
+
+/* Parses a YouTube Data API ISO 8601 duration ("PT4M13S", "PT1H2M", "PT30S")
+ * into whole seconds. Returns 0 for anything unparseable rather than failing
+ * the whole search reply over a missing/malformed duration on one item. */
+static int
+parse_iso8601_duration(const char *iso)
+{
+  const char *p = iso;
+  int hours = 0, minutes = 0, seconds = 0;
+  int value;
+
+  if (!p || p[0] != 'P' || p[1] != 'T')
+    return 0;
+
+  p += 2;
+  while (*p)
+    {
+      value = (int)strtol(p, (char **)&p, 10);
+      if (!*p)
+	break;
+
+      switch (*p)
+	{
+	  case 'H': hours = value; break;
+	  case 'M': minutes = value; break;
+	  case 'S': seconds = value; break;
+	  default: return 0;
+	}
+      p++;
+    }
+
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+/* Fetches durations (in seconds) for a batch of YouTube video ids via the
+ * Data API's videos.list endpoint (part=contentDetails), adding a
+ * "duration" field (int seconds) to each object in jresults whose
+ * "video_id" matches. Best-effort: any failure here just leaves results
+ * without a duration rather than failing the whole search reply, since the
+ * search itself already succeeded. */
+static void
+add_youtube_durations(json_object *jresults, const char *api_key, const char *video_ids_csv)
+{
+  struct keyval *kv = NULL;
+  char *querystring = NULL;
+  char *url = NULL;
+  struct http_client_ctx ctx = { 0 };
+  json_object *response = NULL;
+  json_object *items = NULL;
+  const char *body;
+  int ret;
+  int i;
+  int count;
+
+  if (!video_ids_csv || strlen(video_ids_csv) == 0)
+    return;
+
+  CHECK_NULL(L_WEB, kv = keyval_alloc());
+  if (keyval_add(kv, "part", "contentDetails") < 0
+      || keyval_add(kv, "id", video_ids_csv) < 0
+      || keyval_add(kv, "key", api_key) < 0)
+    {
+      DPRINTF(E_LOG, L_WEB, "Failed to build YouTube videos.list query parameters\n");
+      goto out;
+    }
+
+  querystring = http_form_urlencode(kv);
+  if (!querystring)
+    goto out;
+
+  url = safe_asprintf("https://www.googleapis.com/youtube/v3/videos?%s", querystring);
+
+  ctx.url = url;
+  ctx.input_body = evbuffer_new();
+  if (!ctx.input_body)
+    goto out;
+
+  ret = http_client_request(&ctx, NULL);
+  if (ret < 0)
+    {
+      DPRINTF(E_LOG, L_WEB, "Did not get a reply from YouTube Data API (videos.list)\n");
+      goto out;
+    }
+
+  evbuffer_add(ctx.input_body, "", 1);
+  body = (char *)evbuffer_pullup(ctx.input_body, -1);
+  if (!body || strlen(body) == 0 || ctx.response_code < 200 || ctx.response_code >= 300)
+    {
+      DPRINTF(E_LOG, L_WEB, "Bad reply from YouTube Data API (videos.list), status %d\n", ctx.response_code);
+      goto out;
+    }
+
+  response = json_tokener_parse(body);
+  if (!response || !json_object_object_get_ex(response, "items", &items) || json_object_get_type(items) != json_type_array)
+    goto out;
+
+  count = json_object_array_length(items);
+  for (i = 0; i < count; i++)
+    {
+      json_object *item = json_object_array_get_idx(items, i);
+      json_object *jcontent_details = NULL;
+      const char *id;
+      const char *iso_duration;
+      int duration_seconds;
+      int j;
+      int nresults;
+
+      id = jparse_str_from_obj(item, "id");
+      if (!id || !json_object_object_get_ex(item, "contentDetails", &jcontent_details))
+	continue;
+
+      iso_duration = jparse_str_from_obj(jcontent_details, "duration");
+      if (!iso_duration)
+	continue;
+
+      duration_seconds = parse_iso8601_duration(iso_duration);
+
+      nresults = json_object_array_length(jresults);
+      for (j = 0; j < nresults; j++)
+	{
+	  json_object *jresult = json_object_array_get_idx(jresults, j);
+	  const char *result_video_id = jparse_str_from_obj(jresult, "video_id");
+
+	  if (result_video_id && strcmp(result_video_id, id) == 0)
+	    {
+	      json_object_object_add(jresult, "duration", json_object_new_int(duration_seconds));
+	      break;
+	    }
+	}
+    }
+
+ out:
+  if (response)
+    jparse_free(response);
+  if (ctx.input_body)
+    evbuffer_free(ctx.input_body);
+  free(url);
+  free(querystring);
+  if (kv)
+    {
+      keyval_clear(kv);
+      free(kv);
+    }
 }
 
 static int
@@ -1783,6 +1931,7 @@ jsonapi_reply_youtube_search(struct httpd_request *hreq)
     json_object *items = NULL;
     int i;
     int count;
+    char video_ids[YOUTUBE_SEARCH_MAX_LIMIT * 12 + 1] = "";
 
     if (json_object_object_get_ex(response, "items", &items) && json_object_get_type(items) == json_type_array)
       {
@@ -1832,8 +1981,17 @@ jsonapi_reply_youtube_search(struct httpd_request *hreq)
 	    free(video_url);
 
 	    json_object_array_add(jresults, jresult);
+
+	    if (strlen(video_ids) + strlen(video_id) + 2 < sizeof(video_ids))
+	      {
+		if (video_ids[0])
+		  strcat(video_ids, ",");
+		strcat(video_ids, video_id);
+	      }
 	  }
       }
+
+    add_youtube_durations(jresults, api_key, video_ids);
   }
 
   json_object_object_add(jreply, "results", jresults);

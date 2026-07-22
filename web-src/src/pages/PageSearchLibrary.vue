@@ -9,6 +9,7 @@
     @search-library="search"
     @search-query="openSearch"
     @search-spotify="searchSpotify"
+    @search-youtube="searchYoutube"
     @expand="expand"
   >
     <template #help>
@@ -130,6 +131,10 @@ const expand = (type) => {
 
 const searchSpotify = () => {
   router.push({ name: 'search-spotify' })
+}
+
+const searchYoutube = () => {
+  router.push({ name: 'search-youtube' })
 }
 
 onMounted(() => {

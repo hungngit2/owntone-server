@@ -11,7 +11,11 @@
             v-model="youtubeApiKey"
             class="input"
             type="password"
-            :placeholder="$t('settings.services.youtube.api-key')"
+            :placeholder="
+              servicesStore.youtube.configured
+                ? $t('settings.services.youtube.api-key-set-placeholder')
+                : $t('settings.services.youtube.api-key')
+            "
           />
         </div>
         <div class="control">
@@ -53,8 +57,13 @@ const youtubeApiKey = ref('')
 const youtubeError = ref('')
 
 const saveYoutubeApiKey = async () => {
+  youtubeError.value = ''
+  const apiKey = youtubeApiKey.value.trim()
+  if (!apiKey) {
+    return
+  }
   try {
-    await services.youtube.saveApiKey(youtubeApiKey.value)
+    await services.youtube.saveApiKey(apiKey)
     await servicesStore.initialise()
   } catch {
     youtubeError.value = t('settings.services.youtube.save-failed')

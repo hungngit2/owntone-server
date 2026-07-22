@@ -263,6 +263,7 @@
       "tracks": "Tracks",
       "youtube": {
         "queue-all": "Queue all",
+        "play-failed": "Could not play this track.",
         "queue-failed": "Failed to queue the selected tracks.",
         "queued": "Queued {count} track(s).",
         "search-failed": "The YouTube search failed.",
@@ -398,6 +399,7 @@
       "youtube": {
         "api-key": "YouTube API key",
         "api-key-required": "A YouTube API key is required before you can search.",
+        "api-key-set-placeholder": "•••••••• (already set — leave blank to keep)",
         "configured": "YouTube resolver is configured.",
         "info": "Provide a YouTube Data API v3 key to enable searching YouTube.",
         "resolve-failed": "The YouTube URL could not be resolved.",
