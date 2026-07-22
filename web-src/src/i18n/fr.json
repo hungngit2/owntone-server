@@ -262,10 +262,13 @@
       },
       "tracks": "Pistes",
       "youtube": {
+        "api-key-required": "Définissez une clé API YouTube dans les paramètres pour rechercher.",
         "queue-all": "Tout mettre en file",
         "play-failed": "Impossible de lire cette piste.",
         "queue-failed": "Échec de la mise en file des pistes sélectionnées.",
         "queued": "{count} piste(s) mise(s) en file.",
+        "resolving": "Résolution en cours…",
+        "searching": "Recherche en cours…",
         "search-failed": "La recherche YouTube a échoué.",
         "skipped": "{count} n'ont pas pu être résolues et ont été ignorées."
       }

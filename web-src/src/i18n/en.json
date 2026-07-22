@@ -262,10 +262,13 @@
       },
       "tracks": "Tracks",
       "youtube": {
+        "api-key-required": "Set a YouTube API key in Settings to search.",
         "queue-all": "Queue all",
         "play-failed": "Could not play this track.",
         "queue-failed": "Failed to queue the selected tracks.",
         "queued": "Queued {count} track(s).",
+        "resolving": "Resolving…",
+        "searching": "Searching…",
         "search-failed": "The YouTube search failed.",
         "skipped": "{count} could not be resolved and were skipped."
       }

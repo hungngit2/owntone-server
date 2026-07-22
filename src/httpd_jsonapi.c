@@ -1759,6 +1759,13 @@ jsonapi_reply_youtube(struct httpd_request *hreq)
 
   json_object_object_add(jreply, "enabled", json_object_new_boolean(true));
   json_object_object_add(jreply, "configured", json_object_new_boolean(configured));
+  /* The web UI calls the YouTube Data API directly from the browser for
+   * search (server-side search added ~2 blocking HTTP round trips on top
+   * of an already resource-constrained host) -- it needs the actual key
+   * value for that, not just whether one is configured. This UI is only
+   * ever served to whoever can already reach this JSON API. */
+  if (configured)
+    safe_json_add_string(jreply, "api_key", api_key);
 
   CHECK_ERRNO(L_WEB, evbuffer_add_printf(hreq->out_body, "%s", json_object_to_json_string(jreply)));
 
@@ -1827,6 +1834,142 @@ jsonapi_reply_youtube_resolve(struct httpd_request *hreq)
 
   return HTTP_OK;
 }
+
+/* Auto-generated "Mix"/Radio lists (list=RD...) aren't real playlists and
+ * can't be read through the Data API's playlistItems endpoint -- the web
+ * UI resolves those via the Data API directly client-side for a real
+ * playlist, and falls back to this yt-dlp-backed endpoint only for
+ * Mix/Radio lists (or any other URL the Data API can't expand). Longer
+ * timeout than a single resolve since --flat-playlist still walks the
+ * whole (capped) list server-side. */
+#define YOUTUBE_PLAYLIST_MAX_ITEMS 50
+#define YOUTUBE_PLAYLIST_TIMEOUT_SECS 30
+#define YOUTUBE_PLAYLIST_TIMEOUT_STR "30"
+#define YOUTUBE_PLAYLIST_MAX_ITEMS_STR "50"
+
+static int
+jsonapi_reply_youtube_resolve_playlist(struct httpd_request *hreq)
+{
+  json_object *request = NULL;
+  json_object *jreply = NULL;
+  json_object *jresults = NULL;
+  json_object *data = NULL;
+  json_object *entries = NULL;
+  const char *url;
+  char *output = NULL;
+  int i;
+  int count;
+
+  request = jparse_obj_from_evbuffer(hreq->in_body);
+  if (!request)
+    {
+      DPRINTF(E_LOG, L_WEB, "Failed to parse incoming request\n");
+      return HTTP_BADREQUEST;
+    }
+
+  url = jparse_str_from_obj(request, "url");
+  if (!url || strlen(url) == 0 || !is_youtube_url(url))
+    {
+      DPRINTF(E_LOG, L_WEB, "No valid YouTube URL in playlist resolve request\n");
+      jparse_free(request);
+      return HTTP_BADREQUEST;
+    }
+
+  {
+    char *argv[] = {
+      "timeout", YOUTUBE_PLAYLIST_TIMEOUT_STR,
+      "yt-dlp", "--no-warnings", "--flat-playlist",
+      "--playlist-end", YOUTUBE_PLAYLIST_MAX_ITEMS_STR,
+      "-J", (char *)url,
+      NULL
+    };
+
+    output = run_argv_capture_output(argv, YOUTUBE_PLAYLIST_TIMEOUT_SECS);
+  }
+
+  if (!output)
+    {
+      DPRINTF(E_LOG, L_WEB, "Failed to resolve YouTube playlist '%s'\n", url);
+      jparse_free(request);
+
+      CHECK_NULL(L_WEB, jreply = json_object_new_object());
+      safe_json_add_string(jreply, "error", "Could not resolve this playlist");
+      CHECK_ERRNO(L_WEB, evbuffer_add_printf(hreq->out_body, "%s", json_object_to_json_string(jreply)));
+      jparse_free(jreply);
+
+      return HTTP_INTERNAL;
+    }
+
+  data = json_tokener_parse(output);
+  free(output);
+
+  CHECK_NULL(L_WEB, jreply = json_object_new_object());
+  CHECK_NULL(L_WEB, jresults = json_object_new_array());
+
+  if (data && json_object_object_get_ex(data, "entries", &entries) && json_object_get_type(entries) == json_type_array)
+    {
+      count = json_object_array_length(entries);
+      for (i = 0; i < count && i < YOUTUBE_PLAYLIST_MAX_ITEMS; i++)
+	{
+	  json_object *entry = json_object_array_get_idx(entries, i);
+	  json_object *jthumbnails = NULL;
+	  const char *video_id;
+	  const char *title;
+	  const char *channel;
+	  const char *thumbnail = NULL;
+	  double duration = 0;
+	  json_object *jresult;
+	  char *video_url;
+
+	  video_id = jparse_str_from_obj(entry, "id");
+	  if (!video_id)
+	    continue;
+
+	  title = jparse_str_from_obj(entry, "title");
+	  channel = jparse_str_from_obj(entry, "channel");
+	  if (!channel)
+	    channel = jparse_str_from_obj(entry, "uploader");
+	  duration = jparse_double_from_obj(entry, "duration");
+
+	  if (json_object_object_get_ex(entry, "thumbnails", &jthumbnails) && json_object_get_type(jthumbnails) == json_type_array
+	      && json_object_array_length(jthumbnails) > 0)
+	    thumbnail = jparse_str_from_obj(json_object_array_get_idx(jthumbnails, json_object_array_length(jthumbnails) - 1), "url");
+
+	  video_url = safe_asprintf("https://www.youtube.com/watch?v=%s", video_id);
+
+	  CHECK_NULL(L_WEB, jresult = json_object_new_object());
+	  safe_json_add_string(jresult, "video_id", video_id);
+	  if (title)
+	    safe_json_add_string(jresult, "title", title);
+	  if (channel)
+	    safe_json_add_string(jresult, "channel", channel);
+	  if (thumbnail)
+	    safe_json_add_string(jresult, "thumbnail", thumbnail);
+	  safe_json_add_string(jresult, "url", video_url);
+	  json_object_object_add(jresult, "duration", json_object_new_int((int)duration));
+
+	  free(video_url);
+
+	  json_object_array_add(jresults, jresult);
+	}
+    }
+
+  json_object_object_add(jreply, "results", jresults);
+
+  CHECK_ERRNO(L_WEB, evbuffer_add_printf(hreq->out_body, "%s", json_object_to_json_string(jreply)));
+
+  if (data)
+    jparse_free(data);
+  jparse_free(jreply);
+  jparse_free(request);
+
+  return HTTP_OK;
+}
+
+#undef YOUTUBE_PLAYLIST_MAX_ITEMS
+#undef YOUTUBE_PLAYLIST_TIMEOUT_SECS
+#undef YOUTUBE_PLAYLIST_TIMEOUT_STR
+#undef YOUTUBE_PLAYLIST_MAX_ITEMS_STR
 
 #define YOUTUBE_SEARCH_DEFAULT_LIMIT 15
 #define YOUTUBE_SEARCH_MIN_LIMIT 1
@@ -5607,6 +5750,7 @@ static struct httpd_uri_map adm_handlers[] =
     { HTTPD_METHOD_POST,   "^/api/youtube/resolve$",                       jsonapi_reply_youtube_resolve },
     { HTTPD_METHOD_POST,   "^/api/youtube/search$",                       jsonapi_reply_youtube_search },
     { HTTPD_METHOD_POST,   "^/api/youtube/queue$",                        jsonapi_reply_youtube_queue },
+    { HTTPD_METHOD_POST,   "^/api/youtube/resolve-playlist$",             jsonapi_reply_youtube_resolve_playlist },
     { HTTPD_METHOD_GET,    "^/api/pairing$",                               jsonapi_reply_pairing_get },
     { HTTPD_METHOD_POST,   "^/api/pairing$",                               jsonapi_reply_pairing_pair },
     { HTTPD_METHOD_POST,   "^/api/lastfm-login$",                          jsonapi_reply_lastfm_login },

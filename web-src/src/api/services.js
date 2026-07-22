@@ -48,6 +48,9 @@ export default {
     resolve(url) {
       return api.post('./api/youtube/resolve', { url })
     },
+    resolvePlaylist(url) {
+      return api.post('./api/youtube/resolve-playlist', { url })
+    },
     saveApiKey(apiKey) {
       return api.put('./api/settings/services/youtube_api_key', { value: apiKey })
     },

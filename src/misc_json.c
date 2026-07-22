@@ -109,6 +109,25 @@ jparse_int_from_obj(json_object *haystack, const char *key)
     return 0;
 }
 
+double
+jparse_double_from_obj(json_object *haystack, const char *key)
+{
+  json_object *needle;
+  enum json_type type;
+
+  if (!json_object_object_get_ex(haystack, key, &needle))
+    return 0;
+
+  /* A whole-number value (e.g. a duration with no fractional seconds) is
+   * parsed by json-c as json_type_int, not json_type_double -- accept
+   * both rather than silently returning 0 for those values. */
+  type = json_object_get_type(needle);
+  if (type == json_type_double || type == json_type_int)
+    return json_object_get_double(needle);
+
+  return 0;
+}
+
 int
 jparse_bool_from_obj(json_object *haystack, const char *key)
 {

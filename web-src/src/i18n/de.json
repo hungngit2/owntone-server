@@ -262,10 +262,13 @@
       },
       "tracks": "Tracks",
       "youtube": {
+        "api-key-required": "Lege einen YouTube-API-Schlüssel in den Einstellungen fest, um zu suchen.",
         "queue-all": "Alle einreihen",
         "play-failed": "Dieser Titel konnte nicht abgespielt werden.",
         "queue-failed": "Die ausgewählten Titel konnten nicht eingereiht werden.",
         "queued": "{count} Titel eingereiht.",
+        "resolving": "Wird aufgelöst …",
+        "searching": "Suche läuft …",
         "search-failed": "Die YouTube-Suche ist fehlgeschlagen.",
         "skipped": "{count} konnten nicht aufgelöst werden und wurden übersprungen."
       }

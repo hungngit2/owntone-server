@@ -262,10 +262,13 @@
       },
       "tracks": "曲目",
       "youtube": {
+        "api-key-required": "請先在設定中設定 YouTube API 金鑰後再搜尋。",
         "queue-all": "全部加入佇列",
         "play-failed": "無法播放該曲目。",
         "queue-failed": "無法將所選曲目加入佇列。",
         "queued": "已加入 {count} 首曲目。",
+        "resolving": "解析中…",
+        "searching": "搜尋中…",
         "search-failed": "YouTube 搜尋失敗。",
         "skipped": "{count} 首無法解析，已跳過。"
       }
