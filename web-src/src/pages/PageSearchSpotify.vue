@@ -10,6 +10,7 @@
     @search-library="searchLibrary"
     @search-query="openSearch"
     @search-spotify="search"
+    @search-youtube="searchYoutube"
     @expand="expand"
   />
 </template>
@@ -92,6 +93,10 @@ const search = async (
 
 const searchLibrary = () => {
   router.push({ name: 'search-library' })
+}
+
+const searchYoutube = () => {
+  router.push({ name: 'search-youtube' })
 }
 
 const expand = async (type) => {

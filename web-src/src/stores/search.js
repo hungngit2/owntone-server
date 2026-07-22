@@ -19,5 +19,5 @@ export const useSearchStore = defineStore('SearchStore', {
       }
     }
   },
-  state: () => ({ history: [], query: '', source: 'search-library' })
+  state: () => ({ history: [], query: '', source: 'search-youtube' })
 })
