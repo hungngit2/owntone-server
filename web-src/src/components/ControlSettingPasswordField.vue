@@ -18,16 +18,15 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
 import ControlSetting from '@/components/ControlSetting.vue'
+import { ref } from 'vue'
 
 defineProps({
   placeholder: { default: '', type: String },
   setting: { required: true, type: Object }
 })
 
-// Never reflects the saved password back into the input -- only tracks
-// what the user is currently typing in this field.
+// Never reflects the saved password back into the input, only what's typed.
 const localValue = ref('')
 
 const sanitise = (target) => target.value

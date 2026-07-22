@@ -88,12 +88,45 @@
       />
     </template>
   </content-with-heading>
+  <content-with-heading>
+    <template #heading>
+      <pane-title
+        :content="{ title: $t('settings.webinterface.authentication') }"
+      />
+    </template>
+    <template #content>
+      <div
+        class="notification is-size-7"
+        v-text="$t('settings.webinterface.authentication-info')"
+      />
+      <control-setting-text-field
+        :placeholder="$t('settings.webinterface.auth-username')"
+        :setting="settingsStore.get('webinterface', 'auth_username')"
+      />
+      <control-setting-password-field
+        :placeholder="$t('settings.webinterface.auth-password')"
+        :setting="settingsStore.get('webinterface', 'auth_password')"
+      />
+      <control-setting-switch
+        :disabled="!settingsStore.hasAuthPassword"
+        :setting="settingsStore.get('webinterface', 'require_auth_lan')"
+      >
+        <template v-if="!settingsStore.hasAuthPassword" #help>
+          <p
+            class="help is-warning"
+            v-text="$t('settings.webinterface.require-auth-lan-needs-password')"
+          />
+        </template>
+      </control-setting-switch>
+    </template>
+  </content-with-heading>
 </template>
 
 <script setup>
 import ContentWithHeading from '@/templates/ContentWithHeading.vue'
 import ControlDropdown from '@/components/ControlDropdown.vue'
 import ControlSettingIntegerField from '@/components/ControlSettingIntegerField.vue'
+import ControlSettingPasswordField from '@/components/ControlSettingPasswordField.vue'
 import ControlSettingSwitch from '@/components/ControlSettingSwitch.vue'
 import ControlSettingTextField from '@/components/ControlSettingTextField.vue'
 import PaneTitle from '@/components/PaneTitle.vue'
