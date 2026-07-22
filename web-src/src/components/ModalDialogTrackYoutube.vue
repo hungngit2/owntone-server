@@ -52,9 +52,13 @@ const notify = (text, type) => {
   notifications.add({ text, timeout: 4000, type })
 }
 
-const resolveStreamUrl = async () => {
+/* The item is captured as a plain snapshot at the start of each action (not
+   read again from props.item after an await) -- the same modal instance
+   stays mounted across selections, so props.item can point at a
+   different track by the time an earlier action's own awaits resolve. */
+const resolveStreamUrl = async (item) => {
   const { stream_url: streamUrl, success } = await services.youtube.resolve(
-    props.item.url
+    item.url
   )
   if (!success || !streamUrl) {
     throw new Error('YouTube resolve failed')
@@ -62,34 +66,41 @@ const resolveStreamUrl = async () => {
   return streamUrl
 }
 
-const setMetadata = (itemId) =>
+const setMetadata = (itemId, item) =>
   api.put(`./api/queue/items/${itemId}`, null, {
     params: {
-      artist: props.item.channel || '',
-      artwork_url: props.item.thumbnail || '',
-      title: props.item.title || ''
+      artist: item.channel || '',
+      artwork_url: item.thumbnail || '',
+      title: item.title || ''
     }
   })
 
-const addToQueueAt = async (params) => {
-  const streamUrl = await resolveStreamUrl()
+const addToQueueAt = async (item, params) => {
+  const streamUrl = await resolveStreamUrl(item)
   const added = await api.post('./api/queue/items/add', null, {
     params: { ...params, headers: YOUTUBE_REFERER_HEADER, uris: streamUrl }
   })
   const newItem = added.items?.[0]
   if (newItem) {
-    await setMetadata(newItem.id)
+    await setMetadata(newItem.id, item)
   }
 }
 
-const runAction = async (action, onSuccess) => {
+/* Deliberately serialized (one yt-dlp resolve in flight at a time) rather
+   than letting several clicks run concurrent yt-dlp subprocesses -- this
+   runs on a memory-constrained host also running other services, and each
+   resolve is a real Python process, not a cheap network call. Buttons show
+   as disabled while busy instead of silently dropping the click; for
+   genuinely adding several tracks, use "Queue all" instead, which already
+   resolves sequentially server-side. */
+const runAction = async (item, action, onSuccess) => {
   if (busy.value) {
     return
   }
   busy.value = true
   emit('close')
   try {
-    await action()
+    await action(item)
     onSuccess?.()
   } catch {
     notify(t('page.search.youtube.queue-failed'), 'danger')
@@ -101,21 +112,26 @@ const runAction = async (action, onSuccess) => {
 
 const notifyQueued = () => notify(t('page.search.youtube.queued', { count: 1 }), 'success')
 
-const addToQueue = () => runAction(() => addToQueueAt({}), notifyQueued)
+const addToQueue = () =>
+  runAction(props.item, (item) => addToQueueAt(item, {}), notifyQueued)
 
 const addNextToQueue = () =>
-  runAction(() => {
-    const position = queueStore.current?.position
-    const params = {}
-    if (Number.isInteger(position)) {
-      params.position = position + 1
-    }
-    return addToQueueAt(params)
-  }, notifyQueued)
+  runAction(
+    props.item,
+    (item) => {
+      const position = queueStore.current?.position
+      const params = {}
+      if (Number.isInteger(position)) {
+        params.position = position + 1
+      }
+      return addToQueueAt(item, params)
+    },
+    notifyQueued
+  )
 
 const play = () =>
-  runAction(async () => {
-    const streamUrl = await resolveStreamUrl()
+  runAction(props.item, async (item) => {
+    const streamUrl = await resolveStreamUrl(item)
     const added = await api.post('./api/queue/items/add', null, {
       params: {
         clear: 'true',
@@ -126,13 +142,23 @@ const play = () =>
     })
     const newItem = added.items?.[0]
     if (newItem) {
-      await setMetadata(newItem.id)
+      await setMetadata(newItem.id, item)
     }
   })
 
-const actions = [
-  { handler: addToQueue, icon: 'playlist-plus', key: 'actions.add' },
-  { handler: addNextToQueue, icon: 'playlist-play', key: 'actions.add-next' },
-  { handler: play, icon: 'play', key: 'actions.play' }
-]
+const actions = computed(() => [
+  {
+    disabled: busy.value,
+    handler: addToQueue,
+    icon: 'playlist-plus',
+    key: 'actions.add'
+  },
+  {
+    disabled: busy.value,
+    handler: addNextToQueue,
+    icon: 'playlist-play',
+    key: 'actions.add-next'
+  },
+  { disabled: busy.value, handler: play, icon: 'play', key: 'actions.play' }
+])
 </script>

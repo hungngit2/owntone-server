@@ -63,15 +63,19 @@ const router = useRouter()
 const searchStore = useSearchStore()
 const servicesStore = useServicesStore()
 
-const items = ref([])
-const results = ref(new Map())
 const queueMessage = ref('')
 const searchError = ref('')
 const searching = ref(false)
 const queueing = ref(false)
-const hasSearched = ref(false)
 
 const components = { track: ListTracksYoutube }
+
+/* Results live in searchStore (not local refs) so switching tabs/pages and
+   coming back doesn't lose them -- a fresh yt-dlp/Data-API round trip is
+   too slow to redo just because the user glanced at the queue. */
+const items = computed(() => searchStore.youtubeResults)
+const hasSearched = computed(() => searchStore.youtubeHasSearched)
+const results = computed(() => new Map([['track', items.value]]))
 
 const history = computed(() =>
   searchStore.history.filter((q) => !q.startsWith('query:'))
@@ -85,8 +89,7 @@ const resetFeedback = () => {
 }
 
 const applyResults = (found) => {
-  items.value = found || []
-  results.value = new Map([['track', items.value]])
+  searchStore.youtubeResults = found || []
 }
 
 /* Runs `action` while `guard` is false, ignoring re-entrant calls (a second
@@ -132,7 +135,7 @@ const performSearch = async () => {
     applyResults([])
     searchError.value = t('page.search.youtube.search-failed')
   } finally {
-    hasSearched.value = true
+    searchStore.youtubeHasSearched = true
   }
 }
 
