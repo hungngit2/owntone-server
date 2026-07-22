@@ -876,6 +876,23 @@ jsonapi_reply_config(struct httpd_request *hreq)
   return HTTP_OK;
 }
 
+// Returns true if 'candidate_db_password' (the webinterface auth_password
+// value the DB would hold, NULL/empty meaning none) combined with a
+// conffile 'admin_password' fallback would still give the web interface an
+// effective password. Shared by every guard that must avoid leaving
+// 'require_auth_lan' enabled with no way to log in.
+static bool
+webinterface_has_password(const char *candidate_db_password)
+{
+  const char *cfg_password;
+
+  if (candidate_db_password && *candidate_db_password)
+    return true;
+
+  cfg_password = cfg_getstr(cfg_getsec(cfg, "general"), "admin_password");
+  return (cfg_password && *cfg_password);
+}
+
 static json_object *
 option_get_json(struct settings_option *option)
 {
@@ -1108,10 +1125,12 @@ jsonapi_reply_settings_option_put(struct httpd_request *hreq)
       if (boolval && strcasecmp(categoryname, "webinterface") == 0 && strcasecmp(optionname, "require_auth_lan") == 0)
 	{
 	  struct settings_option *password_option = settings_option_get(category, "auth_password");
-	  const char *db_password = password_option ? settings_option_getstr(password_option) : NULL;
-	  const char *cfg_password = cfg_getstr(cfg_getsec(cfg, "general"), "admin_password");
+	  char *db_password = password_option ? settings_option_getstr(password_option) : NULL;
+	  bool has_password = webinterface_has_password(db_password);
 
-	  if ((!db_password || !*db_password) && (!cfg_password || !*cfg_password))
+	  free(db_password);
+
+	  if (!has_password)
 	    {
 	      DPRINTF(E_LOG, L_WEB, "Refusing to enable 'require_auth_lan' with no password set\n");
 	      return HTTP_BADREQUEST;
@@ -1123,6 +1142,18 @@ jsonapi_reply_settings_option_put(struct httpd_request *hreq)
   else if (option->type == SETTINGS_TYPE_STR && jparse_contains_key(request, "value", json_type_string))
     {
       strval = jparse_str_from_obj(request, "value");
+
+      if (strcasecmp(categoryname, "webinterface") == 0 && strcasecmp(optionname, "auth_password") == 0 && !webinterface_has_password(strval))
+	{
+	  struct settings_option *lan_option = settings_option_get(category, "require_auth_lan");
+
+	  if (lan_option && settings_option_getbool(lan_option))
+	    {
+	      DPRINTF(E_LOG, L_WEB, "Refusing to clear 'auth_password' while 'require_auth_lan' is enabled with no fallback password\n");
+	      return HTTP_BADREQUEST;
+	    }
+	}
+
       ret = settings_option_setstr(option, strval);
     }
   else
@@ -1166,6 +1197,17 @@ jsonapi_reply_settings_option_delete(struct httpd_request *hreq)
     {
       DPRINTF(E_LOG, L_WEB, "Invalid option name '%s' given\n", optionname);
       return HTTP_NOTFOUND;
+    }
+
+  if (strcasecmp(categoryname, "webinterface") == 0 && strcasecmp(optionname, "auth_password") == 0 && !webinterface_has_password(NULL))
+    {
+      struct settings_option *lan_option = settings_option_get(category, "require_auth_lan");
+
+      if (lan_option && settings_option_getbool(lan_option))
+	{
+	  DPRINTF(E_LOG, L_WEB, "Refusing to delete 'auth_password' while 'require_auth_lan' is enabled with no fallback password\n");
+	  return HTTP_BADREQUEST;
+	}
     }
 
   ret = settings_option_delete(option);
