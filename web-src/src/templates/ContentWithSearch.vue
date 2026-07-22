@@ -12,6 +12,8 @@
                   type="search"
                   :placeholder="$t('page.search.placeholder')"
                   autocomplete="off"
+                  @keyup.enter="$emit('search')"
+                  @search="$emit('search')"
                 />
                 <mdicon class="icon is-left" name="magnify" size="16" />
               </div>

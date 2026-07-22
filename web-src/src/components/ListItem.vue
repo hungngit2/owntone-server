@@ -42,7 +42,7 @@
       <control-progress :value="progress" />
     </div>
     <div class="media-right">
-      <a @click.prevent.stop="openDetails">
+      <a class="dots-menu" @click.prevent.stop="openDetails">
         <mdicon class="icon has-text-grey" name="dots-vertical" size="16" />
       </a>
     </div>
@@ -73,5 +73,17 @@ const openDetails = () => emit('openDetails')
 <style scoped>
 .is-not-allowed {
   cursor: not-allowed;
+}
+
+/* The icon itself is 16px -- padding here (rather than growing the icon)
+   gives it a real ~44px touch target without changing how it looks,
+   since a tap that lands just off a small icon on a phone otherwise
+   falls straight through to the row's own "play" handler underneath. */
+.dots-menu {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  margin: -14px;
+  padding: 14px;
 }
 </style>
