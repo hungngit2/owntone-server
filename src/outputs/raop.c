@@ -2632,10 +2632,18 @@ raop_volume_from_pct(int volume, struct output_device *device)
   float raop_volume;
 
   /* RAOP volume
-   *  -144.0 is off (not really used since we have no concept of muted/off)
+   *  -144.0 is off/mute
    *  0 - 100 maps to -30.0 - 0 (if no max_volume set)
+   *
+   * volume == 0 is mapped to -144.0 (true mute) rather than -30.0: -30.0 is
+   * the bottom of the *audible* scale, not silence, and some AirPlay
+   * devices' own amplifiers still produce clearly audible sound at -30.0
+   * depending on source loudness/gain -- confirmed live (volume dragged to
+   * 0 in the UI, device-reported volume also 0, but still audible).
    */
-  if (volume >= 0 && volume <= 100)
+  if (volume == 0)
+    raop_volume = -144.0;
+  else if (volume > 0 && volume <= 100)
     raop_volume = -30.0 + ((float)device->max_volume * (float)volume * 30.0) / (100.0 * RAOP_CONFIG_MAX_VOLUME);
   else
     raop_volume = -144.0;
