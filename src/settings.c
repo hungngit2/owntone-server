@@ -38,6 +38,9 @@ static struct settings_option webinterface_options[] =
       { "show_menu_item_files", SETTINGS_TYPE_BOOL, { true } },
       { "show_menu_item_search", SETTINGS_TYPE_BOOL, { true } },
       { "recently_added_limit", SETTINGS_TYPE_INT, { 100 } },
+      { "auth_username", SETTINGS_TYPE_STR },
+      { "auth_password", SETTINGS_TYPE_STR },
+      { "require_auth_lan", SETTINGS_TYPE_BOOL, { false } },
   };
 
 static struct settings_option artwork_options[] =
