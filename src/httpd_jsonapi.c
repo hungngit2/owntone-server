@@ -1319,11 +1319,63 @@ run_argv_capture_output(char *const argv[], int timeout_secs)
 
   if (pid == 0)
     {
-      /* Child */
-      close(outpipe[0]);
+      /* Child.
+       *
+       * If owntone dropped privileges via runas (main.c uses seteuid()/
+       * setegid(), which only change the effective ids -- real/saved stay
+       * root), this process has a real uid/gid that differs from its
+       * effective uid/gid. The kernel marks any subsequent execve() from
+       * such a process as a "secure exec" (AT_SECURE=1), which makes the
+       * dynamic linker silently ignore LD_LIBRARY_PATH. yt-dlp's bundled
+       * Python interpreter relies on exactly that env var (set by its own
+       * PyInstaller bootloader) to find its bundled libcrypto/_ssl instead
+       * of the system's -- without it, it silently falls back to the
+       * system OpenSSL and fails to load if that's an incompatible version.
+       * Confirmed live: this was the actual cause of yt-dlp reliably
+       * failing only when spawned from owntone, never when run standalone.
+       * Normalize real/effective/saved ids to match before exec -- shedding
+       * the leftover root real-id costs nothing here (this child only ever
+       * runs yt-dlp) and removes the mismatch that triggers AT_SECURE.
+       * setresuid()/setresgid() to the CURRENT effective id are always
+       * permitted even without any privileged capability (unlike plain
+       * setuid(), which needs CAP_SETUID -- already lost the moment the
+       * effective id left root), so these cannot fail here in a way that
+       * should block launching yt-dlp; log and continue on error rather
+       * than aborting the whole resolve over it.
+       */
+      uid_t euid = geteuid();
+      gid_t egid = getegid();
+
+      if (getuid() != euid && setresuid(euid, euid, euid) < 0)
+        DPRINTF(E_LOG, L_WEB, "Could not normalize uid before running '%s': %s\n", argv[0], strerror(errno));
+      if (getgid() != egid && setresgid(egid, egid, egid) < 0)
+        DPRINTF(E_LOG, L_WEB, "Could not normalize gid before running '%s': %s\n", argv[0], strerror(errno));
+
+      /* owntone is a long-running daemon with a large, ever-changing set of
+       * open file descriptors (RAOP/AirPlay sockets, mDNS, the sqlite db
+       * handle, libevent eventfds/signalfds, pipes, ...) -- none of them
+       * are meant for a one-shot yt-dlp invocation; close everything but
+       * the three standard streams before exec.
+       */
+      int devnull = open("/dev/null", O_RDONLY);
+      if (devnull >= 0)
+        {
+          dup2(devnull, STDIN_FILENO);
+          if (devnull > STDIN_FILENO)
+            close(devnull);
+        }
+
       if (dup2(outpipe[1], STDOUT_FILENO) < 0)
         _exit(127);
-      close(outpipe[1]);
+
+      {
+        long openmax = sysconf(_SC_OPEN_MAX);
+        int fd;
+        int maxfd = (openmax > 0 && openmax < 65536) ? (int)openmax : 1024;
+
+        for (fd = 3; fd < maxfd; fd++)
+          close(fd);
+      }
 
       execvp(argv[0], argv);
       _exit(127); /* execvp only returns on failure */
