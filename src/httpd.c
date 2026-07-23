@@ -1379,41 +1379,19 @@ httpd_request_is_trusted(struct httpd_request *hreq)
   return httpd_backend_peer_is_trusted(hreq->backend);
 }
 
-// Returns a heap-allocated string the caller must free, in every case
-// (including the fallback paths).
+// Falls back to the static conffile password, then to the literal "admin",
+// so a fresh install always has a working login instead of denying access
+// outright. Returns a heap-allocated string the caller must free.
 static char *
-httpd_auth_username(void)
+httpd_auth_default_password(void)
 {
-  char *username;
-
-  username = SETTINGS_GETSTR("webinterface", "auth_username");
-  if (username && *username)
-    return username;
-
-  free(username);
-
-  return strdup("admin");
-}
-
-// Falls back to the static conffile password when no DB-backed password has
-// been set yet, so existing owntone.conf-only setups keep working until the
-// user sets one via Settings > Web Interface.
-// Returns a heap-allocated string the caller must free, in every case
-// (including the fallback paths).
-static char *
-httpd_auth_password(void)
-{
-  char *passwd;
   const char *cfg_password;
 
-  passwd = SETTINGS_GETSTR("webinterface", "auth_password");
-  if (passwd && *passwd)
-    return passwd;
-
-  free(passwd);
-
   cfg_password = cfg_getstr(cfg_getsec(cfg, "general"), "admin_password");
-  return cfg_password ? strdup(cfg_password) : NULL;
+  if (cfg_password && *cfg_password)
+    return strdup(cfg_password);
+
+  return strdup("admin");
 }
 
 bool
@@ -1421,22 +1399,39 @@ httpd_request_is_authorized(struct httpd_request *hreq)
 {
   char *username;
   char *passwd;
+  bool username_cleared;
+  bool password_cleared;
   int ret;
 
-  if (httpd_request_is_trusted(hreq) && !SETTINGS_GETBOOL("webinterface", "require_auth_lan"))
-    return true;
+  username = SETTINGS_GETSTR("webinterface", "auth_username");
+  passwd = SETTINGS_GETSTR("webinterface", "auth_password");
 
-  passwd = httpd_auth_password();
-  if (!passwd || !*passwd)
+  // A non-NULL but empty value means the user explicitly saved an empty
+  // field via Settings > Web Interface (distinct from NULL, which means the
+  // option was never touched). Clearing both is a deliberate opt-out of
+  // authentication entirely -- unlike a first-run install (both NULL),
+  // which instead falls through to the admin/admin default below.
+  username_cleared = (username && !*username);
+  password_cleared = (passwd && !*passwd);
+  if (username_cleared && password_cleared)
     {
-      DPRINTF(E_LOG, L_HTTPD, "Web interface request to '%s' denied: No password set\n", hreq->uri);
-
+      free(username);
       free(passwd);
-      httpd_send_error(hreq, HTTP_FORBIDDEN, "Forbidden");
-      return false;
+      return true;
     }
 
-  username = httpd_auth_username();
+  if (!username || !*username)
+    {
+      free(username);
+      username = strdup("admin");
+    }
+
+  if (!passwd || !*passwd)
+    {
+      free(passwd);
+      passwd = httpd_auth_default_password();
+    }
+
   ret = httpd_basic_auth(hreq, username, passwd, PACKAGE " web interface");
   free(username);
   free(passwd);

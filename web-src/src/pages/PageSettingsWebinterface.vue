@@ -107,17 +107,6 @@
         :placeholder="$t('settings.webinterface.auth-password')"
         :setting="settingsStore.get('webinterface', 'auth_password')"
       />
-      <control-setting-switch
-        :disabled="!settingsStore.hasAuthPassword"
-        :setting="settingsStore.get('webinterface', 'require_auth_lan')"
-      >
-        <template v-if="!settingsStore.hasAuthPassword" #help>
-          <p
-            class="help is-warning"
-            v-text="$t('settings.webinterface.require-auth-lan-needs-password')"
-          />
-        </template>
-      </control-setting-switch>
     </template>
   </content-with-heading>
 </template>
