@@ -1397,10 +1397,13 @@ httpd_auth_default_password(void)
 bool
 httpd_request_is_authorized(struct httpd_request *hreq)
 {
+  static bool warned_default_credentials = false;
   char *username;
   char *passwd;
   bool username_cleared;
   bool password_cleared;
+  bool using_default_username;
+  bool using_default_password;
   int ret;
 
   username = SETTINGS_GETSTR("webinterface", "auth_username");
@@ -1420,16 +1423,25 @@ httpd_request_is_authorized(struct httpd_request *hreq)
       return true;
     }
 
-  if (!username || !*username)
+  using_default_username = (!username || !*username);
+  if (using_default_username)
     {
       free(username);
       username = strdup("admin");
     }
 
-  if (!passwd || !*passwd)
+  using_default_password = (!passwd || !*passwd);
+  if (using_default_password)
     {
       free(passwd);
       passwd = httpd_auth_default_password();
+      using_default_password = (strcmp(passwd, "admin") == 0);
+    }
+
+  if (using_default_username && using_default_password && !warned_default_credentials)
+    {
+      DPRINTF(E_LOG, L_HTTPD, "Web interface is using the default admin/admin credentials -- set a password in Settings > Web Interface\n");
+      warned_default_credentials = true;
     }
 
   ret = httpd_basic_auth(hreq, username, passwd, PACKAGE " web interface");
