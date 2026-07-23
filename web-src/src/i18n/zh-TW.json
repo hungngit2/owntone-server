@@ -415,11 +415,11 @@
       }
     },
     "webinterface": {
-      "auth-password": "密碼",
+      "auth-password-placeholder": "密碼（留空則保持不變）",
       "auth-save-failed": "儲存失敗",
       "auth-username": "使用者名稱",
       "authentication": "驗證",
-      "authentication-info": "一律需要驗證，包括區域網路。預設為 admin/admin，直到變更為止。清空任一欄位即可完全停用驗證。",
+      "authentication-info": "一律需要驗證，包括區域網路。預設為 admin/admin，直到變更為止。密碼留空表示保持不變；清空使用者名稱並儲存即可完全停用驗證。",
       "genres": "音樂類型",
       "language": "語言",
       "navigation-item-selection": "選擇頂部導航欄菜單項",

@@ -415,11 +415,11 @@
       }
     },
     "webinterface": {
-      "auth-password": "Mot de passe",
+      "auth-password-placeholder": "Mot de passe (laisser vide pour ne pas le modifier)",
       "auth-save-failed": "Échec de l'enregistrement",
       "auth-username": "Nom d'utilisateur",
       "authentication": "Authentification",
-      "authentication-info": "Toujours requis, y compris sur le réseau local. Par défaut admin/admin tant que non modifié. Videz l'un des deux champs pour désactiver complètement l'authentification.",
+      "authentication-info": "Toujours requis, y compris sur le réseau local. Par défaut admin/admin tant que non modifié. Laissez le mot de passe vide pour ne pas le modifier ; videz le nom d'utilisateur et enregistrez pour désactiver complètement l'authentification.",
       "genres": "Genres",
       "language": "Langue",
       "navigation-item-selection": "Sélectionnez les éléments de la barre de navigation supérieure",

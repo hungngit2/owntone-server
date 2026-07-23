@@ -99,8 +99,8 @@
         class="notification is-size-7"
         v-text="$t('settings.webinterface.authentication-info')"
       />
-      <div class="field is-grouped mt-5">
-        <div class="control is-expanded">
+      <div class="field">
+        <div class="control">
           <input
             v-model="authUsername"
             class="input"
@@ -108,44 +108,29 @@
             :placeholder="$t('settings.webinterface.auth-username')"
           />
         </div>
-        <div class="control">
-          <button
-            class="button"
-            :class="{ 'is-loading': authUsernameSaving }"
-            @click="saveAuthUsername"
-            v-text="$t('actions.save')"
-          />
-        </div>
       </div>
-      <div
-        v-if="authUsernameError"
-        class="help is-danger"
-        v-text="authUsernameError"
-      />
-      <div class="field is-grouped mt-5">
-        <div class="control is-expanded">
+      <div class="field">
+        <div class="control">
           <input
             v-model="authPassword"
             class="input"
             type="password"
             autocomplete="new-password"
-            :placeholder="$t('settings.webinterface.auth-password')"
+            :placeholder="$t('settings.webinterface.auth-password-placeholder')"
           />
         </div>
+      </div>
+      <div class="field is-grouped mt-5">
         <div class="control">
           <button
             class="button"
-            :class="{ 'is-loading': authPasswordSaving }"
-            @click="saveAuthPassword"
+            :class="{ 'is-loading': authSaving }"
+            @click="saveAuth"
             v-text="$t('actions.save')"
           />
         </div>
       </div>
-      <div
-        v-if="authPasswordError"
-        class="help is-danger"
-        v-text="authPasswordError"
-      />
+      <div v-if="authError" class="help is-danger" v-text="authError" />
     </template>
   </content-with-heading>
 </template>
@@ -182,8 +167,6 @@ const locale = computed({
 const authUsername = ref(
   settingsStore.get('webinterface', 'auth_username')?.value ?? ''
 )
-const authUsernameSaving = ref(false)
-const authUsernameError = ref('')
 
 /* The settings store only populates asynchronously (a websocket handshake
    after page load), so the initial ref() read above can run before it does.
@@ -199,47 +182,45 @@ watch(
 )
 
 /* Never prefilled with the saved password (same masking convention as
-   elsewhere in this app) -- saved only when the user explicitly clicks Save,
-   not on every keystroke, so a partial/in-progress edit is never persisted. */
+   elsewhere in this app), and left blank on save means "leave the password
+   unchanged" rather than "clear it" -- otherwise saving a username edit
+   without retyping the password would wipe it, and an empty password
+   disables authentication entirely (httpd_request_is_authorized). To
+   actually disable auth via this form, clear the username instead: an
+   empty username alone already triggers the same "either field empty"
+   bypass, with no such ambiguity since it's a visible, prefilled field. */
 const authPassword = ref('')
-const authPasswordSaving = ref(false)
-const authPasswordError = ref('')
+const authSaving = ref(false)
+const authError = ref('')
 
-const saveAuthUsername = async () => {
-  authUsernameError.value = ''
-  authUsernameSaving.value = true
-  try {
-    const option = {
-      category: 'webinterface',
-      name: 'auth_username',
-      value: authUsername.value
-    }
-    await settings.update(option)
-    settingsStore.update(option)
-  } catch {
-    authUsernameError.value = t('settings.webinterface.auth-save-failed')
-  } finally {
-    authUsernameSaving.value = false
-  }
-}
-
-const saveAuthPassword = async () => {
-  authPasswordError.value = ''
-  authPasswordSaving.value = true
-  try {
-    const option = {
+/* Password is only included when non-empty -- see the comment above
+   authPassword for why a blank value means "unchanged", not "clear". */
+const buildAuthOptions = () => {
+  const options = [
+    { category: 'webinterface', name: 'auth_username', value: authUsername.value }
+  ]
+  if (authPassword.value) {
+    options.push({
       category: 'webinterface',
       name: 'auth_password',
       value: authPassword.value
-    }
-    await settings.update(option)
-    settingsStore.update(option)
-    // eslint-disable-next-line require-atomic-updates -- No real race: authPassword is only ever touched from this one guarded save handler.
+    })
+  }
+  return options
+}
+
+const saveAuth = async () => {
+  authError.value = ''
+  authSaving.value = true
+  try {
+    const options = buildAuthOptions()
+    await Promise.all(options.map((option) => settings.update(option)))
+    options.forEach((option) => settingsStore.update(option))
     authPassword.value = ''
   } catch {
-    authPasswordError.value = t('settings.webinterface.auth-save-failed')
+    authError.value = t('settings.webinterface.auth-save-failed')
   } finally {
-    authPasswordSaving.value = false
+    authSaving.value = false
   }
 }
 </script>

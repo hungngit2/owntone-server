@@ -415,11 +415,11 @@
       }
     },
     "webinterface": {
-      "auth-password": "密码",
+      "auth-password-placeholder": "密码（留空则保持不变）",
       "auth-save-failed": "保存失败",
       "auth-username": "用户名",
       "authentication": "身份验证",
-      "authentication-info": "始终需要身份验证，包括本地网络。默认使用 admin/admin，直到更改为止。清空任意一个字段即可完全禁用身份验证。",
+      "authentication-info": "始终需要身份验证，包括本地网络。默认使用 admin/admin，直到更改为止。密码留空表示保持不变；清空用户名并保存即可完全禁用身份验证。",
       "genres": "流派",
       "language": "语言",
       "navigation-item-selection": "选择顶部导航栏菜单项",

@@ -415,11 +415,11 @@
       }
     },
     "webinterface": {
-      "auth-password": "Password",
+      "auth-password-placeholder": "Password (leave blank to keep unchanged)",
       "auth-save-failed": "Failed to save",
       "auth-username": "Username",
       "authentication": "Authentication",
-      "authentication-info": "Always required, including on the local network. Defaults to admin/admin until changed. Clear either field to disable authentication entirely.",
+      "authentication-info": "Always required, including on the local network. Defaults to admin/admin until changed. Leave the password blank to keep it unchanged; clear the username and save to disable authentication entirely.",
       "genres": "Genres",
       "language": "Language",
       "navigation-item-selection": "Select the top navigation bar menu items",

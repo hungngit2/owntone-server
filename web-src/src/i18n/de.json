@@ -415,11 +415,11 @@
       }
     },
     "webinterface": {
-      "auth-password": "Passwort",
+      "auth-password-placeholder": "Passwort (leer lassen, um es unverändert zu lassen)",
       "auth-save-failed": "Speichern fehlgeschlagen",
       "auth-username": "Benutzername",
       "authentication": "Authentifizierung",
-      "authentication-info": "Immer erforderlich, auch im lokalen Netzwerk. Standardmäßig admin/admin, bis geändert. Ein beliebiges Feld leeren, um die Authentifizierung vollständig zu deaktivieren.",
+      "authentication-info": "Immer erforderlich, auch im lokalen Netzwerk. Standardmäßig admin/admin, bis geändert. Passwort leer lassen, um es unverändert zu lassen; Benutzernamen leeren und speichern, um die Authentifizierung vollständig zu deaktivieren.",
       "genres": "Genres",
       "language": "Sprache",
       "navigation-item-selection": "Wähle hier die Einträge des oberen Navigationsmenüs",
