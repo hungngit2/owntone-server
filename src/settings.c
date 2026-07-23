@@ -40,7 +40,6 @@ static struct settings_option webinterface_options[] =
       { "recently_added_limit", SETTINGS_TYPE_INT, { 100 } },
       { "auth_username", SETTINGS_TYPE_STR },
       { "auth_password", SETTINGS_TYPE_STR },
-      { "require_auth_lan", SETTINGS_TYPE_BOOL, { false } },
   };
 
 static struct settings_option artwork_options[] =
