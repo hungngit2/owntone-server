@@ -125,6 +125,7 @@
           <button
             class="button"
             :class="{ 'is-loading': authSaving }"
+            :disabled="!authSettingsLoaded || authSaving"
             @click="saveAuth"
             v-text="$t('actions.save')"
           />
@@ -181,6 +182,14 @@ watch(
   }
 )
 
+/* Guards the same race: until the webinterface category has actually
+   loaded, an unconditional username submit could send '' just because it
+   hasn't arrived yet, not because the user cleared it -- disable Save
+   until then rather than risk that. */
+const authSettingsLoaded = computed(() =>
+  settingsStore.categories.some((category) => category.name === 'webinterface')
+)
+
 /* Never prefilled with the saved password (same masking convention as
    elsewhere in this app), and left blank on save means "leave the password
    unchanged" rather than "clear it" -- otherwise saving a username edit
@@ -209,13 +218,19 @@ const buildAuthOptions = () => {
   return options
 }
 
+/* Saved sequentially (not Promise.all) so a failure partway through is
+   deterministic -- whichever option didn't run yet simply wasn't sent,
+   rather than leaving it ambiguous which of two concurrent PUTs failed. */
 const saveAuth = async () => {
   authError.value = ''
   authSaving.value = true
   try {
     const options = buildAuthOptions()
-    await Promise.all(options.map((option) => settings.update(option)))
-    options.forEach((option) => settingsStore.update(option))
+    for (const option of options) {
+      // eslint-disable-next-line no-await-in-loop -- Deliberately sequential, see comment above.
+      await settings.update(option)
+      settingsStore.update(option)
+    }
     authPassword.value = ''
   } catch {
     authError.value = t('settings.webinterface.auth-save-failed')
