@@ -151,7 +151,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import ContentWithHeading from '@/templates/ContentWithHeading.vue'
 import ControlDropdown from '@/components/ControlDropdown.vue'
 import ControlSettingIntegerField from '@/components/ControlSettingIntegerField.vue'
@@ -184,6 +184,19 @@ const authUsername = ref(
 )
 const authUsernameSaving = ref(false)
 const authUsernameError = ref('')
+
+/* The settings store only populates asynchronously (a websocket handshake
+   after page load), so the initial ref() read above can run before it does.
+   Fill in the field once the real value arrives, but only while it's still
+   untouched -- never clobber whatever the user has already started typing. */
+watch(
+  () => settingsStore.get('webinterface', 'auth_username')?.value,
+  (value) => {
+    if (!authUsername.value && value) {
+      authUsername.value = value
+    }
+  }
+)
 
 /* Never prefilled with the saved password (same masking convention as
    elsewhere in this app) -- saved only when the user explicitly clicks Save,
