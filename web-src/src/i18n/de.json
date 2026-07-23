@@ -416,6 +416,7 @@
     },
     "webinterface": {
       "auth-password": "Passwort",
+      "auth-save-failed": "Speichern fehlgeschlagen",
       "auth-username": "Benutzername",
       "authentication": "Authentifizierung",
       "authentication-info": "Immer erforderlich, auch im lokalen Netzwerk. Standardmäßig admin/admin, bis geändert. Ein beliebiges Feld leeren, um die Authentifizierung vollständig zu deaktivieren.",

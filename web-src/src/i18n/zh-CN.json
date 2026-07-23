@@ -416,6 +416,7 @@
     },
     "webinterface": {
       "auth-password": "密码",
+      "auth-save-failed": "保存失败",
       "auth-username": "用户名",
       "authentication": "身份验证",
       "authentication-info": "始终需要身份验证，包括本地网络。默认使用 admin/admin，直到更改为止。清空任意一个字段即可完全禁用身份验证。",

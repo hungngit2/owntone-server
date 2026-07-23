@@ -416,6 +416,7 @@
     },
     "webinterface": {
       "auth-password": "Password",
+      "auth-save-failed": "Failed to save",
       "auth-username": "Username",
       "authentication": "Authentication",
       "authentication-info": "Always required, including on the local network. Defaults to admin/admin until changed. Clear either field to disable authentication entirely.",
