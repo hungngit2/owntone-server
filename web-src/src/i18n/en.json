@@ -418,7 +418,7 @@
       "auth-password": "Password",
       "auth-username": "Username",
       "authentication": "Authentication",
-      "authentication-info": "Always required, including on the local network. Defaults to admin/admin until changed. Clear both fields to disable authentication entirely.",
+      "authentication-info": "Always required, including on the local network. Defaults to admin/admin until changed. Clear either field to disable authentication entirely.",
       "genres": "Genres",
       "language": "Language",
       "navigation-item-selection": "Select the top navigation bar menu items",

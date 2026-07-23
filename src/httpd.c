@@ -1411,12 +1411,12 @@ httpd_request_is_authorized(struct httpd_request *hreq)
 
   // A non-NULL but empty value means the user explicitly saved an empty
   // field via Settings > Web Interface (distinct from NULL, which means the
-  // option was never touched). Clearing both is a deliberate opt-out of
-  // authentication entirely -- unlike a first-run install (both NULL),
+  // option was never touched). Clearing either one is a deliberate opt-out
+  // of authentication entirely -- unlike a first-run install (both NULL),
   // which instead falls through to the admin/admin default below.
   username_cleared = (username && !*username);
   password_cleared = (passwd && !*passwd);
-  if (username_cleared && password_cleared)
+  if (username_cleared || password_cleared)
     {
       free(username);
       free(passwd);

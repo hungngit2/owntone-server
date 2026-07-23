@@ -418,7 +418,7 @@
       "auth-password": "Mot de passe",
       "auth-username": "Nom d'utilisateur",
       "authentication": "Authentification",
-      "authentication-info": "Toujours requis, y compris sur le réseau local. Par défaut admin/admin tant que non modifié. Videz les deux champs pour désactiver complètement l'authentification.",
+      "authentication-info": "Toujours requis, y compris sur le réseau local. Par défaut admin/admin tant que non modifié. Videz l'un des deux champs pour désactiver complètement l'authentification.",
       "genres": "Genres",
       "language": "Langue",
       "navigation-item-selection": "Sélectionnez les éléments de la barre de navigation supérieure",

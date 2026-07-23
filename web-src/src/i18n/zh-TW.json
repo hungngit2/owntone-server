@@ -418,7 +418,7 @@
       "auth-password": "密碼",
       "auth-username": "使用者名稱",
       "authentication": "驗證",
-      "authentication-info": "一律需要驗證，包括區域網路。預設為 admin/admin，直到變更為止。將兩個欄位都清空即可完全停用驗證。",
+      "authentication-info": "一律需要驗證，包括區域網路。預設為 admin/admin，直到變更為止。清空任一欄位即可完全停用驗證。",
       "genres": "音樂類型",
       "language": "語言",
       "navigation-item-selection": "選擇頂部導航欄菜單項",
