@@ -377,7 +377,12 @@
       "pairing-request": "远程配对请求来自于 ",
       "speaker-pairing": "扬声器配对和设备验证",
       "speaker-pairing-info": "如果您的扬声器需要配对，请输入其显示的验证码。您还可以设置一个偏移补偿（±2000 毫秒）以同步多个扬声器之间的播放。 要使偏移生效，请重新启动流。",
+      "sync-tuning": "AirPlay/RAOP 同步调节",
+      "sync-tuning-info": "OwnTone 每隔多少毫秒重新同步各设备的 AirPlay/RAOP 播放时序（100–10000，默认 1000）。数值越小，纠正漂移越快，但在某些音箱上可能导致更频繁的可听调整。更改仅在每台设备下次开始播放时生效。",
       "verification-code": "验证码"
+    },
+    "misc": {
+      "airplay-sync-interval-ms": "重新同步间隔（毫秒）"
     },
     "services": {
       "authorise": "授权访问服务 {service}。",

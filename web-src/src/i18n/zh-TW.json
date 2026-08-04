@@ -377,7 +377,12 @@
       "pairing-request": "遠程配對請求來自於 ",
       "speaker-pairing": "揚聲器配對和設備驗證",
       "speaker-pairing-info": "若您的揚聲器需要配對，請輸入其顯示的驗證碼。您還可以設置一個偏移補償（±2000 毫秒）以同步多個揚聲器之間的播放。 要使偏移生效，請重新啟動串流。",
+      "sync-tuning": "AirPlay/RAOP 同步調整",
+      "sync-tuning-info": "OwnTone 每隔多少毫秒重新同步各裝置的 AirPlay/RAOP 播放時序（100–10000，預設 1000）。數值越小，校正飄移越快，但在某些喇叭上可能導致更頻繁的可聽調整。變更僅在每台裝置下次開始播放時生效。",
       "verification-code": "驗證碼"
+    },
+    "misc": {
+      "airplay-sync-interval-ms": "重新同步間隔（毫秒）"
     },
     "services": {
       "authorise": "授權訪問服務 {service}。",
