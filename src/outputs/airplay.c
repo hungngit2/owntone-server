@@ -43,6 +43,7 @@
 
 #include "evrtsp/evrtsp.h"
 #include "conffile.h"
+#include "settings.h"
 #include "logger.h"
 #include "mdns.h"
 #include "misc.h"
@@ -1152,6 +1153,25 @@ master_session_cleanup(struct airplay_master_session *ams)
   master_session_free(ams);
 }
 
+// Converts the 'misc.airplay_sync_interval_ms' setting to a sample count for
+// rtp_session_new(), clamped to a sane range so a bad stored value can't
+// produce a pathological live resync interval. Default (1000ms) reproduces
+// today's fixed "once per second" behavior exactly, since rtp_session_new()'s
+// own <= 0 fallback is quality->sample_rate samples (= 1 second, any rate).
+static int
+sync_each_nsamples_get(struct media_quality *quality)
+{
+  int interval_ms;
+
+  interval_ms = SETTINGS_GETINT("misc", "airplay_sync_interval_ms");
+  if (interval_ms < 100)
+    interval_ms = 100;
+  else if (interval_ms > 10000)
+    interval_ms = 10000;
+
+  return interval_ms * quality->sample_rate / 1000;
+}
+
 static struct airplay_master_session *
 master_session_make(struct media_quality *quality, bool use_ptp, enum output_channels channels)
 {
@@ -1180,7 +1200,7 @@ master_session_make(struct media_quality *quality, bool use_ptp, enum output_cha
 
   clock_id = use_ptp ? ptpd_clock_id_get() : 0;
 
-  ams->rtp_session = rtp_session_new(quality, AIRPLAY_PACKET_BUFFER_SIZE, 0, clock_id);
+  ams->rtp_session = rtp_session_new(quality, AIRPLAY_PACKET_BUFFER_SIZE, sync_each_nsamples_get(quality), clock_id);
   if (!ams->rtp_session)
     {
       goto error;
