@@ -102,12 +102,12 @@
       <pane-title :content="{ title: $t('settings.devices.sync-tuning') }" />
     </template>
     <template #content>
-      <div
-        class="content"
-        v-text="$t('settings.devices.sync-tuning-info')"
-      />
+      <div class="content" v-text="$t('settings.devices.sync-tuning-info')" />
       <control-setting-integer-field
+        :max="10000"
+        :min="100"
         :setting="settingsStore.get('misc', 'airplay_sync_interval_ms')"
+        :step="100"
       />
     </template>
   </content-with-heading>

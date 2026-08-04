@@ -1163,13 +1163,15 @@ sync_each_nsamples_get(struct media_quality *quality)
 {
   int interval_ms;
 
-  interval_ms = SETTINGS_GETINT("misc", "airplay_sync_interval_ms");
-  if (interval_ms < 100)
-    interval_ms = 100;
-  else if (interval_ms > 10000)
-    interval_ms = 10000;
+  interval_ms = SETTINGS_GETINT("misc", SETTINGS_OPTION_AIRPLAY_SYNC_INTERVAL_MS);
+  if (interval_ms <= 0)
+    interval_ms = 1000; // 0 or unset means "not configured" -> compile-time default
+  else if (interval_ms < SETTINGS_AIRPLAY_SYNC_INTERVAL_MS_MIN)
+    interval_ms = SETTINGS_AIRPLAY_SYNC_INTERVAL_MS_MIN;
+  else if (interval_ms > SETTINGS_AIRPLAY_SYNC_INTERVAL_MS_MAX)
+    interval_ms = SETTINGS_AIRPLAY_SYNC_INTERVAL_MS_MAX;
 
-  return interval_ms * quality->sample_rate / 1000;
+  return (int)((int64_t)interval_ms * quality->sample_rate / 1000);
 }
 
 static struct airplay_master_session *

@@ -4,6 +4,9 @@
 
 #include <stdbool.h>
 
+#define SETTINGS_OPTION_AIRPLAY_SYNC_INTERVAL_MS "airplay_sync_interval_ms"
+#define SETTINGS_AIRPLAY_SYNC_INTERVAL_MS_MIN 100
+#define SETTINGS_AIRPLAY_SYNC_INTERVAL_MS_MAX 10000
 
 enum settings_type {
   SETTINGS_TYPE_INT,

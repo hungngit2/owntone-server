@@ -377,7 +377,7 @@
       "speaker-pairing": "Speaker pairing and device verification",
       "speaker-pairing-info": "If your speaker requires pairing, enter the verification code displayed. You can also set an offset compensation (±2000 ms) to synchronise playback between multiple speakers. To apply the offset, please restart the stream.",
       "sync-tuning": "AirPlay/RAOP Sync Tuning",
-      "sync-tuning-info": "How often (in milliseconds) OwnTone resynchronizes AirPlay/RAOP playback timing per device (100–10000, default 1000). Lower values correct drift faster but may cause more frequent audible adjustments on some speakers. Takes effect the next time playback starts on each device.",
+      "sync-tuning-info": "How often (in milliseconds) OwnTone resynchronizes AirPlay/RAOP playback timing per device (100–10000, default 1000). Lower values correct drift faster but may cause more frequent audible adjustments on some speakers. Changes take effect the next time playback fully stops and restarts, not just when a single device reconnects.",
       "verification-code": "Verification code"
     },
     "misc": {
