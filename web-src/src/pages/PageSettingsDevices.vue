@@ -97,6 +97,20 @@
       </div>
     </template>
   </content-with-heading>
+  <content-with-heading>
+    <template #heading>
+      <pane-title :content="{ title: $t('settings.devices.sync-tuning') }" />
+    </template>
+    <template #content>
+      <div
+        class="content"
+        v-text="$t('settings.devices.sync-tuning-info')"
+      />
+      <control-setting-integer-field
+        :setting="settingsStore.get('misc', 'airplay_sync_interval_ms')"
+      />
+    </template>
+  </content-with-heading>
 </template>
 
 <script setup>
@@ -104,6 +118,7 @@ import ContentWithHeading from '@/templates/ContentWithHeading.vue'
 import ControlDropdown from '@/components/ControlDropdown.vue'
 import ControlIntegerField from '@/components/ControlIntegerField.vue'
 import ControlPinField from '@/components/ControlPinField.vue'
+import ControlSettingIntegerField from '@/components/ControlSettingIntegerField.vue'
 import ControlSwitch from '@/components/ControlSwitch.vue'
 import PaneTitle from '@/components/PaneTitle.vue'
 import TabsSettings from '@/components/TabsSettings.vue'
@@ -112,9 +127,11 @@ import { ref } from 'vue'
 import remotes from '@/api/remotes'
 import { useOutputsStore } from '@/stores/outputs'
 import { useRemotesStore } from '@/stores/remotes'
+import { useSettingsStore } from '@/stores/settings'
 
 const outputsStore = useOutputsStore()
 const remotesStore = useRemotesStore()
+const settingsStore = useSettingsStore()
 
 const outputPin = ref('')
 const remotePairingDisabled = ref(true)

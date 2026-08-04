@@ -376,7 +376,12 @@
       "pairing-request": "Remote-Pairing-Anfrage von ",
       "speaker-pairing": "Lautsprecher-Pairing und Geräteverifikation",
       "speaker-pairing-info": "Wenn Ihr Lautsprecher gekoppelt werden muss, geben Sie den angezeigten Verifikationscode ein. Sie können auch eine Offset-Kompensation (±2000 ms) einstellen, um die Wiedergabe zwischen mehreren Lautsprechern zu synchronisieren. Um den Offset anzuwenden, starten Sie bitte den Stream neu.",
+      "sync-tuning": "AirPlay/RAOP-Synchronisationsabstimmung",
+      "sync-tuning-info": "Wie oft (in Millisekunden) OwnTone die AirPlay/RAOP-Wiedergabezeit pro Gerät neu synchronisiert (100–10000, Standard 1000). Niedrigere Werte korrigieren Drift schneller, können bei manchen Lautsprechern aber zu häufigeren, hörbaren Anpassungen führen. Wird erst beim nächsten Start der Wiedergabe auf jedem Gerät wirksam.",
       "verification-code": "Verifikationscode"
+    },
+    "misc": {
+      "airplay-sync-interval-ms": "Resync-Intervall (ms)"
     },
     "services": {
       "authorise": "Erlaube den Zugriff auf den Dienst {service}",

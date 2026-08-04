@@ -376,7 +376,12 @@
       "pairing-request": "Demande de jumelage de télécommande ",
       "speaker-pairing": "Jumelage d’enceinte et vérification d’appareil",
       "speaker-pairing-info": "Si votre enceinte nécessite un jumelage entrez le code de vérification affiché. Vous pouvez également définir un délai de compensation (±2000 ms) pour synchroniser la lecture entre plusieurs enceintes. Pour appliquer ce délai, veuillez redémarrer le flux.",
+      "sync-tuning": "Réglage de la synchronisation AirPlay/RAOP",
+      "sync-tuning-info": "Fréquence (en millisecondes) à laquelle OwnTone resynchronise la synchronisation de lecture AirPlay/RAOP par appareil (100–10000, valeur par défaut 1000). Des valeurs plus faibles corrigent la dérive plus rapidement mais peuvent provoquer des ajustements audibles plus fréquents sur certaines enceintes. Prend effet au prochain démarrage de la lecture sur chaque appareil.",
       "verification-code": "Code de vérification"
+    },
+    "misc": {
+      "airplay-sync-interval-ms": "Intervalle de resynchronisation (ms)"
     },
     "services": {
       "authorise": "Autorisez l’accès au service {service}.",
