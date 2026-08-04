@@ -58,6 +58,7 @@ static struct settings_option misc_options[] =
   {
       { "streamurl_keywords_artwork_url", SETTINGS_TYPE_STR },
       { "streamurl_keywords_length", SETTINGS_TYPE_STR },
+      { "airplay_sync_interval_ms", SETTINGS_TYPE_INT, { 1000 } },
   };
 
 static struct settings_option services_options[] =
