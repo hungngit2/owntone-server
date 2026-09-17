@@ -1,6 +1,7 @@
 #!/bin/bash
 # One-click migration from the Docker-based OwnTone deployment to a native
-# arm64 .deb install. Run as root on the target Armbian host:
+# .deb install. Supports arm64 (ARM) and amd64 (Intel) architectures.
+# Run as root on the target Debian host:
 #   curl -fsSL https://raw.githubusercontent.com/hungngit2/owntone-server/master/install.sh | sudo bash
 # (use `bash`, not `sh` -- this script relies on a couple of bash-only
 # constructs, so piping into dash/POSIX sh will fail partway through)
@@ -121,20 +122,24 @@ fix_conf_logfile() {
 [ "$(id -u)" -eq 0 ] || die "must be run as root"
 
 ARCH="$(dpkg --print-architecture)"
-[ "$ARCH" = "arm64" ] || die "this package is arm64-only, detected '$ARCH'"
+case "$ARCH" in
+  arm64|amd64) ;;
+  *) die "unsupported architecture '$ARCH' — only arm64 (ARM) and amd64 (Intel) are supported" ;;
+esac
+log "Detected architecture: $ARCH"
 
-log "Resolving release asset..."
+log "Resolving release asset for $ARCH..."
 if [ -n "$PINNED_VERSION" ]; then
-  ASSET_URL="https://github.com/${GITHUB_REPO}/releases/download/v${PINNED_VERSION}/owntone_${PINNED_VERSION}_arm64.deb"
+  ASSET_URL="https://github.com/${GITHUB_REPO}/releases/download/v${PINNED_VERSION}/owntone_${PINNED_VERSION}_${ARCH}.deb"
 elif command -v jq >/dev/null 2>&1; then
   ASSET_URL="$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" \
-    | jq -r '.assets[].browser_download_url | select(endswith("arm64.deb"))' | head -1)"
-  [ -n "$ASSET_URL" ] || die "could not find a arm64.deb asset on the latest release"
+    | jq -r ".assets[].browser_download_url | select(endswith(\"${ARCH}.deb\"))" | head -1)"
+  [ -n "$ASSET_URL" ] || die "could not find a ${ARCH}.deb asset on the latest release"
 else
   ASSET_URL="$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" \
-    | grep -o '"browser_download_url": *"[^"]*arm64\.deb"' \
+    | grep -o "\"browser_download_url\": *\"[^\"]*${ARCH}\.deb\"" \
     | head -1 | sed -E 's/.*"(https[^"]+)"/\1/')"
-  [ -n "$ASSET_URL" ] || die "could not find a arm64.deb asset on the latest release"
+  [ -n "$ASSET_URL" ] || die "could not find a ${ARCH}.deb asset on the latest release"
 fi
 log "Using asset: $ASSET_URL"
 
