@@ -10,7 +10,7 @@ Build-Depends: debhelper-compat (= 13), autoconf, libtool, gettext, gawk, gperf,
 Standards-Version: 4.6.0
 
 Package: owntone
-Architecture: arm64
+Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, avahi-daemon
 Description: DAAP/DACP (iTunes), RSP and MPD server with AirPlay/Chromecast support
  OwnTone is a DAAP/DACP (iTunes), MPD (Music Player Daemon) and RSP (Roku)
