@@ -27,7 +27,7 @@ test_transform_both_is_noop(void)
   int16_t orig[8];
   memcpy(orig, buf, sizeof(buf));
 
-  channel_transform((uint8_t *)buf, sizeof(buf), 16, 2, OUTPUT_CHANNELS_BOTH);
+  channel_transform((uint8_t *)buf, sizeof(buf), 16, 2, OUTPUT_CHANNELS_BOTH, true);
 
   assert(memcmp(buf, orig, sizeof(buf)) == 0);
   printf("test_transform_both_is_noop: OK\n");
@@ -40,7 +40,7 @@ test_transform_left(void)
   int16_t buf[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
   int16_t expected[8] = { 1, 1, 3, 3, 5, 5, 7, 7 }; // right := left
 
-  channel_transform((uint8_t *)buf, sizeof(buf), 16, 2, OUTPUT_CHANNELS_LEFT);
+  channel_transform((uint8_t *)buf, sizeof(buf), 16, 2, OUTPUT_CHANNELS_LEFT, true);
 
   assert(memcmp(buf, expected, sizeof(buf)) == 0);
   printf("test_transform_left: OK\n");
@@ -52,7 +52,7 @@ test_transform_right(void)
   int16_t buf[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
   int16_t expected[8] = { 2, 2, 4, 4, 6, 6, 8, 8 }; // left := right
 
-  channel_transform((uint8_t *)buf, sizeof(buf), 16, 2, OUTPUT_CHANNELS_RIGHT);
+  channel_transform((uint8_t *)buf, sizeof(buf), 16, 2, OUTPUT_CHANNELS_RIGHT, true);
 
   assert(memcmp(buf, expected, sizeof(buf)) == 0);
   printf("test_transform_right: OK\n");
@@ -71,7 +71,7 @@ test_transform_24bit(void)
     0x03, 0x02, 0x01,  0x03, 0x02, 0x01,
   };
 
-  channel_transform(buf, sizeof(buf), 24, 2, OUTPUT_CHANNELS_LEFT);
+  channel_transform(buf, sizeof(buf), 24, 2, OUTPUT_CHANNELS_LEFT, true);
 
   assert(memcmp(buf, expected, sizeof(buf)) == 0);
   printf("test_transform_24bit: OK\n");

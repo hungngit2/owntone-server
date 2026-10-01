@@ -736,7 +736,7 @@ playback_write(struct pulse_session *ps, struct output_buffer *obuf)
 	}
 
       memcpy(ps->chanbuf, odata->buffer, odata->bufsize);
-      channel_transform(ps->chanbuf, odata->bufsize, odata->quality.bits_per_sample, odata->quality.channels, ps->channels);
+      channel_transform(ps->chanbuf, odata->bufsize, odata->quality.bits_per_sample, odata->quality.channels, ps->channels, odata->quality.bits_per_sample != 24);
       data = ps->chanbuf;
     }
 

@@ -4308,7 +4308,7 @@ airplay_write(struct output_buffer *obuf)
 		  ams->chanbuf_size = obuf->data[i].bufsize;
 		}
 	      memcpy(ams->chanbuf, obuf->data[i].buffer, obuf->data[i].bufsize);
-	      channel_transform(ams->chanbuf, obuf->data[i].bufsize, obuf->data[i].quality.bits_per_sample, obuf->data[i].quality.channels, ams->channels);
+	      channel_transform(ams->chanbuf, obuf->data[i].bufsize, obuf->data[i].quality.bits_per_sample, obuf->data[i].quality.channels, ams->channels, obuf->data[i].quality.bits_per_sample != 24);
 	      evbuffer_add(ams->input_buffer, ams->chanbuf, obuf->data[i].bufsize);
 	    }
 	  ams->input_buffer_samples += obuf->data[i].samples;
