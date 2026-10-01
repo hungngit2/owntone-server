@@ -1979,7 +1979,6 @@ output_channels_to_string(enum output_channels channels)
 }
 
 void
-void
 channel_transform(uint8_t *buffer, size_t bufsize, int bits_per_sample, int channels, enum output_channels mode, bool packed)
 {
   int bytes_per_sample;
@@ -1998,16 +1997,6 @@ channel_transform(uint8_t *buffer, size_t bufsize, int bits_per_sample, int chan
 
   frame_size = bytes_per_sample * channels;
   nframes = bufsize / frame_size;
-
-  for (i = 0, frame = buffer; i < nframes; i++, frame += frame_size)
-    {
-      if (mode == OUTPUT_CHANNELS_LEFT)
-	memcpy(frame + bytes_per_sample, frame, bytes_per_sample); // right := left
-      else // OUTPUT_CHANNELS_RIGHT
-	memcpy(frame, frame + bytes_per_sample, bytes_per_sample); // left := right
-    }
-}
-
 
   for (i = 0, frame = buffer; i < nframes; i++, frame += frame_size)
     {
