@@ -562,13 +562,16 @@ playing_resync_timer_disarm(void)
 static void
 playing_resync_cb(int fd, short what, void *arg)
 {
-  if (!channel_split_output_selected())
+  struct player_source *ps = pb_session.playing_now;
+
+  if (!ps || ps->data_kind == DATA_KIND_PIPE || !channel_split_output_selected())
     {
       playing_resync_timer_arm();
       return;
     }
 
-  if (playing_resync_due)
+  // Resuming mid-track needs a seek, which live streams (len_ms 0) silently skip
+  if (playing_resync_due && ps->len_ms > 0)
     {
       playing_resync_trigger();
       return;
@@ -1284,7 +1287,7 @@ event_play_start()
 {
   DPRINTF(E_DBG, L_PLAYER, "event_play_start()\n");
 
-  if (playing_resync_due)
+  if (playing_resync_due && pb_session.playing_now->data_kind != DATA_KIND_PIPE)
     playing_resync_trigger();
 
   if (!pb_session.metadata_sent)
