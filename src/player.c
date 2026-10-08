@@ -331,6 +331,10 @@ static struct event *pb_timer_ev;
 // idle_resync_cb()). Armed/disarmed on playback state transitions.
 static struct event *idle_resync_timer_ev;
 
+static struct event *playing_resync_timer_ev;
+static bool playing_resync_due;
+static bool playing_resync_resuming;
+
 // Time between ticks, i.e. time between when playback_cb() is invoked
 static struct timespec player_tick_interval;
 // Timer resolution
@@ -384,6 +388,15 @@ idle_resync_timer_arm(void);
 static void
 idle_resync_timer_disarm(void);
 
+static void
+playing_resync_timer_arm(void);
+
+static void
+playing_resync_timer_disarm(void);
+
+static void
+playing_resync_trigger(void);
+
 static int
 pb_suspend(void);
 
@@ -425,6 +438,14 @@ static void
 status_update_impl(enum play_status status, short listener_events, const char *caller)
 {
   DPRINTF(E_DBG, L_PLAYER, "Status update - status: %d, events: %d, caller: %s\n", status, listener_events, caller);
+
+  if (status == PLAY_PLAYING && player_state != PLAY_PLAYING)
+    playing_resync_timer_arm();
+  else if (status != PLAY_PLAYING)
+    playing_resync_timer_disarm();
+
+  if (status != PLAY_PAUSED)
+    playing_resync_resuming = false;
 
   player_state = status;
 
@@ -496,6 +517,65 @@ static void
 idle_resync_timer_disarm(void)
 {
   evtimer_del(idle_resync_timer_ev);
+}
+
+static bool
+channel_split_output_selected(void)
+{
+  struct output_device *device;
+
+  for (device = outputs_list(); device; device = device->next)
+    {
+      if (OUTPUTS_DEVICE_DISPLAY_SELECTED(device) && device->channels != OUTPUT_CHANNELS_BOTH)
+	return true;
+    }
+
+  return false;
+}
+
+static void
+playing_resync_timer_arm(void)
+{
+  int playback_resync_minutes;
+  struct timeval tv;
+
+  playing_resync_due = false;
+
+  playback_resync_minutes = cfg_getint(cfg_getsec(cfg, "general"), "playback_resync_minutes");
+  if (playback_resync_minutes <= 0)
+    return;
+
+  tv.tv_sec = playback_resync_minutes * 60;
+  tv.tv_usec = 0;
+  evtimer_add(playing_resync_timer_ev, &tv);
+}
+
+static void
+playing_resync_timer_disarm(void)
+{
+  playing_resync_due = false;
+  evtimer_del(playing_resync_timer_ev);
+}
+
+// Flush re-anchors receivers whose L/R split drifts despite sync packets (Phicomm R1)
+// Deferred to the next track change so the re-buffer gap falls between songs
+static void
+playing_resync_cb(int fd, short what, void *arg)
+{
+  if (!channel_split_output_selected())
+    {
+      playing_resync_timer_arm();
+      return;
+    }
+
+  if (playing_resync_due)
+    {
+      playing_resync_trigger();
+      return;
+    }
+
+  playing_resync_timer_arm();
+  playing_resync_due = true;
 }
 
 /*
@@ -1203,6 +1283,9 @@ static void
 event_play_start()
 {
   DPRINTF(E_DBG, L_PLAYER, "event_play_start()\n");
+
+  if (playing_resync_due)
+    playing_resync_trigger();
 
   if (!pb_session.metadata_sent)
     {
@@ -2640,6 +2723,7 @@ playback_pause(void *arg, int *retval)
 
   if (player_state == PLAY_PAUSED)
     {
+      playing_resync_resuming = false;
       *retval = 0;
       return COMMAND_END;
     }
@@ -2655,6 +2739,69 @@ playback_pause(void *arg, int *retval)
 
   // Otherwise, just run the bottom half
   return COMMAND_END;
+}
+
+static enum command_state
+playback_resync(void *arg, int *retval)
+{
+  if (player_state != PLAY_PLAYING)
+    {
+      *retval = -1;
+      return COMMAND_END;
+    }
+
+  return playback_pause(arg, retval);
+}
+
+static enum command_state
+playback_resync_resume(void *arg, int *retval)
+{
+  if (!playing_resync_resuming)
+    {
+      *retval = -1; // Skips playback_start_bh
+      return COMMAND_END;
+    }
+
+  playing_resync_resuming = false;
+
+  return playback_start(arg, retval);
+}
+
+// Thread: input
+static int
+playing_resync_resume_cb(void)
+{
+  return commands_exec_sync(cmdbase, playback_resync_resume, playback_start_bh, NULL);
+}
+
+static enum command_state
+playback_resync_bh(void *arg, int *retval)
+{
+  playback_pause_bh(arg, retval);
+  if (*retval < 0)
+    return COMMAND_END;
+
+  playing_resync_resuming = true;
+  input_buffer_full_cb(playing_resync_resume_cb);
+
+  return COMMAND_END;
+}
+
+// Thread: worker. Must not run on the player thread, commands_exec_sync() would deadlock.
+static void
+playing_resync_worker_cb(void *arg)
+{
+  commands_exec_sync(cmdbase, playback_resync, playback_resync_bh, NULL);
+}
+
+static void
+playing_resync_trigger(void)
+{
+  playing_resync_timer_disarm();
+
+  DPRINTF(E_INFO, L_PLAYER, "Pausing and resuming to re-align channel-split outputs\n");
+
+  worker_execute(playing_resync_worker_cb, NULL, 0, 0);
 }
 
 static enum command_state
@@ -4205,6 +4352,7 @@ player_init(void)
   CHECK_NULL(L_PLAYER, pb_timer_ev = event_new(evbase_player, SIGALRM, EV_SIGNAL | EV_PERSIST, playback_cb, NULL));
 #endif
   CHECK_NULL(L_PLAYER, idle_resync_timer_ev = evtimer_new(evbase_player, idle_resync_cb, NULL));
+  CHECK_NULL(L_PLAYER, playing_resync_timer_ev = evtimer_new(evbase_player, playing_resync_cb, NULL));
   CHECK_NULL(L_PLAYER, cmdbase = commands_base_new(evbase_player, NULL));
 
   ret = outputs_init();
@@ -4237,6 +4385,7 @@ player_init(void)
  error_evbase_free:
   commands_base_free(cmdbase);
   event_free(idle_resync_timer_ev);
+  event_free(playing_resync_timer_ev);
   event_free(pb_timer_ev);
   event_base_free(evbase_player);
 #ifdef HAVE_TIMERFD
@@ -4281,6 +4430,7 @@ player_deinit(void)
   free(history);
 
   event_free(idle_resync_timer_ev);
+  event_free(playing_resync_timer_ev);
   event_free(pb_timer_ev);
   event_base_free(evbase_player);
 }
