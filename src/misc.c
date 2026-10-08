@@ -1979,7 +1979,7 @@ output_channels_to_string(enum output_channels channels)
 }
 
 void
-channel_transform(uint8_t *buffer, size_t bufsize, int bits_per_sample, int channels, enum output_channels mode, bool packed)
+channel_transform(uint8_t *buffer, size_t bufsize, int bits_per_sample, int channels, enum output_channels mode)
 {
   int bytes_per_sample;
   int frame_size;
@@ -1990,11 +1990,7 @@ channel_transform(uint8_t *buffer, size_t bufsize, int bits_per_sample, int chan
   if (mode == OUTPUT_CHANNELS_BOTH || channels != 2)
     return;
 
-  if (packed || bits_per_sample != 24)
-    bytes_per_sample = bits_per_sample / 8;
-  else
-    bytes_per_sample = 4; // 24-bit in 32-bit container
-
+  bytes_per_sample = bits_per_sample / 8;
   frame_size = bytes_per_sample * channels;
   nframes = bufsize / frame_size;
 

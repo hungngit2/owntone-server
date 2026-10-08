@@ -837,7 +837,7 @@ buffer_write(struct alsa_playback_session *pb, struct output_data *odata, snd_pc
 	}
 
       memcpy(pb->chanbuf, odata->buffer, odata->bufsize);
-      channel_transform(pb->chanbuf, odata->bufsize, odata->quality.bits_per_sample, odata->quality.channels, pb->as->channels, odata->quality.bits_per_sample != 24);
+      channel_transform(pb->chanbuf, odata->bufsize, odata->quality.bits_per_sample, odata->quality.channels, pb->as->channels);
       data = pb->chanbuf;
     }
 
