@@ -25,7 +25,7 @@ Reviewed 2026-10-15. Covers your OwnTone fork (`hungngit2/owntone-server`), the 
 | Speaker protocol | AirPlay 1 (RAOP), according to the fork's own design note `docs/superpowers/specs/2026-08-01-airplay-sync-interval-design.md` |
 | Receiver apps on R1 | `com.autodlna` and `com.example.echoservice` are the apps the dashboard restarts. Which one actually serves AirPlay is not confirmed (see 4.D step 2). |
 
-What the fork changes for channel splitting (local checkout `/Users/hung.nguyen/Data/workspace/owntone-server`):
+What the fork changes for channel splitting (local checkout `/mnt/nasdata//workspace/owntone-server`):
 
 - A per-output channel transform in the ALSA, Pulse, FIFO, RAOP and AirPlay backends (`channel_transform()` in `src/misc.c`).
 - AirPlay and RAOP master sessions keyed by channel mode, so left and right never share an encoded stream (`master_session_make()` in `src/outputs/airplay.c` and `src/outputs/raop.c`).
@@ -256,7 +256,7 @@ Each prompt is self-contained, so you can paste it into a new session.
 ### P1. Step 0 diagnostics
 
 ```
-Context: OwnTone 29.3 (my fork hungngit2/owntone-server, local checkout /Users/hung.nguyen/Data/workspace/owntone-server) runs on my Wyse at 10.0.0.100 (ssh -i ~/.ssh/id_hungnguyen root@10.0.0.100). It plays to two AirPlay 1 speakers (R1 units, 10.0.1.1 and 10.0.1.2) set up as a manual left/right pair using the fork's per-output "channels" field. After a while the two speakers drift apart. Read /Users/hung.nguyen/Data/Claude/owntone-stereo-split-review.md, sections 1 and 3, first.
+Context: OwnTone 29.3 (my fork hungngit2/owntone-server, local checkout /mnt/nasdata//workspace/owntone-server) runs on my Wyse at 10.0.0.100 (ssh -i ~/.ssh/id_hungnguyen root@10.0.0.100). It plays to two AirPlay 1 speakers (R1 units, 10.0.1.1 and 10.0.1.2) set up as a manual left/right pair using the fork's per-output "channels" field. After a while the two speakers drift apart. Read /mnt/nasdata//Claude/owntone-stereo-split-review.md, sections 1 and 3, first.
 
 Goal: decide whether the drift comes from the sender (OwnTone) or the receivers (R1), following section 3 of that file.
 
@@ -273,7 +273,7 @@ Don't change OwnTone source code in this task.
 ### P2. Dashboard fixes
 
 ```
-Repo: /Users/hung.nguyen/Data/workspace/ytb-owntone-dashboard (PHP + vanilla JS dashboard for OwnTone). Read /Users/hung.nguyen/Data/Claude/owntone-stereo-split-review.md section 2 first. Verify each finding against the current code before changing anything.
+Repo: /mnt/nasdata/workspace/ytb-owntone-dashboard (PHP + vanilla JS dashboard for OwnTone). Read /mnt/nasdata//Claude/owntone-stereo-split-review.md section 2 first. Verify each finding against the current code before changing anything.
 
 Fix, in public/backend.php:
 1. check_and_manage_airplay_outputs() must never restart the R1 receiver apps while OwnTone's player state is "play". Restart only the speaker that is actually missing, and only when idle. Add a config constant to disable the whole reconcile (default: enabled, current behaviour otherwise).
@@ -287,7 +287,7 @@ Add tests in tests/backend_test.php for the pure parts (speaker matching, decide
 ### P3. Evaluate a different receiver app on the R1
 
 ```
-I have two R1 smart speakers (Android, adb over network at 10.0.1.1:5555 and 10.0.1.2:5555) used as AirPlay receivers for OwnTone. They drift apart over long playback. Read /Users/hung.nguyen/Data/Claude/owntone-stereo-split-review.md, sections 3 and 4.D, first.
+I have two R1 smart speakers (Android, adb over network at 10.0.1.1:5555 and 10.0.1.2:5555) used as AirPlay receivers for OwnTone. They drift apart over long playback. Read /mnt/nasdata//Claude/owntone-stereo-split-review.md, sections 3 and 4.D, first.
 
 Goal: find out whether any Android receiver app follows the sender's clock and corrects drift well enough for a left/right pair on these speakers. AirPlay 1 (RAOP timing) or AirPlay 2 (PTP) are both fine.
 
@@ -303,7 +303,7 @@ If nothing fits, say so plainly and recommend option E.
 ### P4. Linux receivers running shairport-sync
 
 ```
-I want to replace two AirPlay receivers with Linux boards running shairport-sync so they keep sync as a left/right stereo pair behind OwnTone (Wyse, 10.0.0.100). Read /Users/hung.nguyen/Data/Claude/owntone-stereo-split-review.md, section 4.E, first.
+I want to replace two AirPlay receivers with Linux boards running shairport-sync so they keep sync as a left/right stereo pair behind OwnTone (Wyse, 10.0.0.100). Read /mnt/nasdata//Claude/owntone-stereo-split-review.md, section 4.E, first.
 
 Do:
 1. Recommend hardware per speaker (board, DAC or amp HAT) for my speakers: <describe speakers / whether they are passive or have line-in>. Check current shairport-sync AirPlay 2 hardware guidance and cite it.
@@ -316,7 +316,7 @@ Don't buy or flash anything for me. Give me the list and the steps.
 ### P5. Fork follow-up (only if Step 0 says the sender is at fault)
 
 ```
-My OwnTone fork (/Users/hung.nguyen/Data/workspace/owntone-server, origin hungngit2/owntone-server) splits stereo across two AirPlay 1 speakers using per-output "channels". A measured test (Step 0 in /Users/hung.nguyen/Data/Claude/owntone-stereo-split-review.md) showed that plain multiroom stays in sync but the left/right split drifts: <paste the measured offsets>.
+My OwnTone fork (/mnt/nasdata//workspace/owntone-server, origin hungngit2/owntone-server) splits stereo across two AirPlay 1 speakers using per-output "channels". A measured test (Step 0 in /mnt/nasdata//Claude/owntone-stereo-split-review.md) showed that plain multiroom stays in sync but the left/right split drifts: <paste the measured offsets>.
 
 Goal: find and fix the drift in the split path.
 
